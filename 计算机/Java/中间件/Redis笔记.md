@@ -615,3 +615,48 @@ AOF重写过程分为手动触发和自动触发：
 > 自动触发时机=`aof_current_size` > `auto-aof-rewrite-min-size` && (`aof_current_size` - `aof_base_size`) / `aof_base_size` >= `auto-aof-rewrite-percentage`
 >
 > 其中`aof_current_size`和`aof_base_size`可以在 info Persistence 统计信息中查看
+
+
+
+AOF重写运行流程
+
+![AOF重写运行流程](../../../assets/AOF重写流程.png)
+
++ 执行AOF重写请求
+  + 如果当前进程正在进行AOF重写，请求不执行返回如下响应：`ERR Background append only file rewriting already in progress`
+  + 如果当前进行正在执行`bgsave`操作，重写命令延迟到`bgsave`完成之后再执行，返回如下响应`Background append only file rewriting scheduled`
+
++ 父进程执行fork创建子进程，开销等于`bgsave`过程
++ 主进程fork操作完成后，继续响应其他命令。所有修改命令依然写入AOF缓冲区并根据`appendfsync`策略同步到硬盘，保证原有AOF机制正确性
++ 由于fork操作运用写时复制技术，子进程只能共享fork操作时的内存数据。由于父进程依然响应命令，Redis使用“AOF重写缓冲区”保存这部分数据，防止新AOF文件生成期间丢失这部分数据。
++ 子进程根据内存快照，按照命令合并规则写入到新的AOF文件。每次批量写入硬盘数据由配置`aof-rewrite-incremental-fsync`控制，默认为32MB，防止单次刷盘数据过多造成硬盘阻塞
++ 新的AOF文件写入完成后，子进程发送信号给父进程，父进程更新统计信息，具体见 info persistence 下的 aof_*相关统计
++ 父进程吧AOF重写缓存区的数据写入到新的AOF文件。
++ 使用新的AOF文件替换老文件，完成AOF重写
+
+6.3.3.5 重启加载
+
+AOF和RDB文件都可以用于服务器重启时的数据恢复
+
+![Redis持久化文件加载过程](../../../assets/Redis持久化文件加载流程.png)
+
++ AOF持久化开启并且存在AOF文件时，优先加载AOF文件，打印如下日志：`* DB loaded from append only file: 5.841 seconds`
++ AOF关闭或者AOF文件不存在时，加载RDB文件，打印如下日志：`DB loaded from disk: 5.586 seconds`
++ 加载AOF/RDB文件成功后，Redis启动成功
++ AOF/RDB文件存在错误时，Redis启动失败并打印错误信息
+
+
+
+#### 6.3.4 AOF追加阻塞
+
+当开启AOF持久化时，常用的同步硬盘的策略是everysec，用于平衡性能和数据安全性。对于这种方式，Redis使用另一条线程每秒执行fsync同步硬盘。当系统硬盘资源繁忙时，会造成Redis主线程阻塞
+
+![使用everysec做刷盘策略的流程](../../../assets/使用everysec做刷盘策略的流程.png)
+
+阻塞流程：
+
++ 主线程负责写入AOF缓冲区
++ AOF线程负责每秒执行一次同步磁盘操作，并记录最近一次同步时间
++ 主线程负责对比上次AOF同步时间
+  + 如果距上次同步成功时间在2秒内，主线程直接返回
+  + 如果距上次同步成功时间超过2秒主线程将会阻塞，直到同步操作完成
