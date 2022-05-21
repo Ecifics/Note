@@ -874,3 +874,87 @@ public void test5() {
 + 验证码在2分钟内有效---把验证码放入redis，并设置过期时间为120秒
 + 判断验证码是否一致
 + 限制手机号发送验证码次数---每次获取后执行incr操作，当期大于2时，不在发送
+
+
+
+```java
+public class PhoneCode {
+
+    /**
+     * 获取6位数字验证码
+     */
+    public String getCode() {
+        Random random = new Random();
+
+        StringBuilder stringBuilder = new StringBuilder();
+        for (int i = 0; i < 6; i++) {
+            int rand = random.nextInt(10);
+            stringBuilder.append(String.valueOf(rand));
+        }
+
+        return stringBuilder.toString();
+    }
+
+    /**
+     * 每个手机每天只能发送三次
+     * 验证码放入redis，并设置其过期时间
+     */
+    public void setVerifyCode(String phone) {
+        Jedis jedis = RedisUtil.getConnection();
+
+        // 拼接key
+        String countKey = "VerifyCode" + phone + ":count";
+
+        String codeKey = "VerifyCode" + phone + ":code";
+
+        String count = jedis.get(countKey);
+        //还没发送过验证码
+        if (count == null) {
+            jedis.setex(countKey, 24 * 60 * 60, "1");
+        }
+
+        if (count != null && Integer.parseInt(count) <= 2) {
+            jedis.incr(countKey);
+        }
+
+        // 以及发送了三次
+        if (count != null && Integer.parseInt(count) > 2) {
+            System.out.println("今天发送次数超过三次，不能再发送了");
+            jedis.close();
+        }
+
+        String vcode = getCode();
+        jedis.setex(codeKey, 120, vcode);
+        jedis.close();
+    }
+
+    /**
+     * 验证码校验
+     */
+    public void getRedisCode(String phone, String code) {
+        Jedis jedis = RedisUtil.getConnection();
+
+        String codeKey = "VerifyCode" + phone + ":code";
+        String redisCode = jedis.get(codeKey);
+
+        if (Objects.equals(redisCode, code)) {
+            System.out.println("成功");
+        } else {
+            System.out.println("失败");
+        }
+
+        jedis.close();
+    }
+}
+```
+
+
+
+### 7.2 SpringBoot整合Redis
+
+
+
+## 八、缓存设计
+### 8.1 缓存的收益和成本
+
+
