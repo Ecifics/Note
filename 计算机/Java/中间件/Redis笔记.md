@@ -422,12 +422,14 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 ![哈希](C:\Users\Ecifics\Desktop\Recent Files\笔记\计算机\Java\中间件\image\哈希.png)
 
-#### 4.2.2
+#### 4.2.2 命令
 
 （1）`hset key field value`设置值
 
 ```shell
 127.0.0.1:6379> hset user:1 name tom
+(integer) 1
+127.0.0.1:6379> hset user:1 age 28
 (integer) 1
 ```
 
@@ -440,6 +442,8 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 ```shell
 127.0.0.1:6379> hget user:1 name
 "tom"
+127.0.0.1:6379> hget user:1 age
+"28"
 ```
 
 > 注：如果键或者域不存在，会返回nil
@@ -448,9 +452,128 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 （3）`hdel key field [field ...]`删除域
 
+hdel会删除一个或者多个field，返回结果为成功删除field的个数
+
+```shell
+127.0.0.1:6379> hdel user:1 name
+(integer) 1
+127.0.0.1:6379> hdel user:1 age
+(integer) 1
+```
 
 
 
+（4）`hlen key`：计算field个数
+
+```shell
+127.0.0.1:6379> hset user:1 name tom
+(integer) 1
+127.0.0.1:6379> hset user:1 age 28
+(integer) 1
+127.0.0.1:6379> hset user:1 city chengdu
+(integer) 1
+127.0.0.1:6379> hlen user:1
+(integer) 3
+```
+
+
+
+（5）批量设置或者过去field-key
+
+```shell
+hmget key field [field ...]
+hmset key field value [field value ...]
+```
+
+
+
+```shell
+127.0.0.1:6379> hmset user:1 name mike age 12 city chengdu
+OK
+127.0.0.1:6379> hmget user:1 name age city
+1) "mike"
+2) "12"
+3) "chengdu"
+```
+
+
+
+（6）`hexists key field`：判断field是否存在
+
+存在返回1，不存在返回0
+
+```java
+127.0.0.1:6379> hexists user:1 name
+(integer) 1
+```
+
+
+
+（7）`hkeys key`：获取所有field
+
+```shell
+127.0.0.1:6379> hkeys user:1
+1) "name"
+2) "age"
+3) "city"
+```
+
+
+
+（8）`hvals key`：获取所有的value
+
+```shell
+127.0.0.1:6379> hvals user:1
+1) "mike"
+2) "12"
+3) "chengdu"
+```
+
+
+
+（9）`hgetall key`：获取所有的field-value
+
+```shell
+127.0.0.1:6379> hgetall user:1
+1) "name"
+2) "mike"
+3) "age"
+4) "12"
+5) "city"
+6) "chengdu"
+```
+
+
+
+（10）`hstrlen key field`：计算value的字符串长度
+
+```shell
+127.0.0.1:6379> hget user:1 name
+"mike"
+127.0.0.1:6379> hstrlen user:1 name
+(integer) 4
+```
+
+
+
+#### 4.2.3 哈希命令时间复杂度
+
+| 命令 | 时间复杂度 |
+| :------------: | :----: |
+| `hset key field value` | `O(1)` |
+| `hget key field` | `O(1)` |
+| `hdel key field [field ...]` | `O(k)，k是field个数` |
+| `hlen key` | `O(1)` |
+| `hgetall key` | `O(n)，n是field总数` |
+| `hmget field [field ...]` | `O(k)，k是field的个数` |
+| `hmset field value [field value ...]` | `O(k)，k是field的个数` |
+| `hexists key field` | `O(1)` |
+| `hkeys key` | `O(n)，n是field总数` |
+| `hvals key` | `O(n)，n是field总数` |
+| `hsetnx key field value` | `O(1)` |
+| `hincrby key field increment` | `O(1)` |
+| `hincrbyfloat key field increment` | `O(1)` |
+| `hstrlen key field` | `O(1)` |
 
 ### 4.3 列表
 
@@ -956,5 +1079,4 @@ public class PhoneCode {
 
 ## 八、缓存设计
 ### 8.1 缓存的收益和成本
-
 
