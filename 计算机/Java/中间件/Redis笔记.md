@@ -422,6 +422,8 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 ![哈希](C:\Users\Ecifics\Desktop\Recent Files\笔记\计算机\Java\中间件\image\哈希.png)
 
+哈希类型中的映射关系叫做`field-value`，注意这里的value是指field对应的值，不是键对应的值
+
 #### 4.2.2 命令
 
 （1）`hset key field value`设置值
@@ -574,6 +576,28 @@ OK
 | `hincrby key field increment` | `O(1)` |
 | `hincrbyfloat key field increment` | `O(1)` |
 | `hstrlen key field` | `O(1)` |
+
+
+
+#### 4.2.4 内部编码
+
++ `ziplist(压缩列表)`：当哈希类型元素个数小于`hash-max-ziplist-entries`配置（默认512个）、同时所有值都小于`hash-max-ziplist-value`配置（默认64字节）时，Redis会使用ziplist作为哈希的内部实现，ziplist使用更加紧凑的结构实现多个元素的连续存储，所以在节省内存方面比hashtable更加优秀
++ `hashtable(哈希表)`：当哈希类型无法满足ziplist的条件时，Redis会采用hashtable作为哈希的内部实现，因为此时ziplist的读写效率会下降，而hashtable的读写时间复杂度为O(1)
+
+
+
+#### 4.2.5 使用场景
+
+哈希类型经常被用来存储用户相关信息。优化用户信息的获取，不需要重复从数据库当中读取，提高系统性能，下面是将用户信息存储在关系型数据库和Redis中的差异
+
+<img src="image/关系型数据库保存用户信息.png" align>
+
+<img src="image/使用哈希类型缓存用户信息.png" align>
+
+其中有两点不同之处：
+
++ 哈希类型是稀疏的，而关系型数据库是完全结构化的，例如哈希类型每个键可以有不同的field，而关系型数据库一旦添加新的列，所有行都要为其设置值（即使为NULL）
++ 关系型数据库可以做负责的关系查询，而Redis去模拟关系型复杂查询开发困难，维护成本高
 
 ### 4.3 列表
 
