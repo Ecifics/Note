@@ -812,13 +812,129 @@ OK
 
 （12）`blpop key [key ...] timeout` 和 `brpop key [key ...] timout` 
 
+blpop和brpop是lpop和rpop的阻塞版本，它们除了弹出方向不同，使用方法基本相同，所以下面以brpop命令进行说明，brpop命令包含两个参数
+
+timeout：阻塞时间（单位秒）
+
++ 列表为空：如果timeout=3，那么客户端要等到3秒后返回，如果timeout=0，那么客户端一直阻塞等下去，如果等待过程中有数据添加进来，会立刻返回，即使没有到timeout时间
+
+```shell
+127.0.0.1:6379> brpop list:test 3
+(nil)
+(3.04s)
+```
+
++ 列表不为空：客户端会忽略timeout的值立刻返回
+
+```shell
+127.0.0.1:6379> brpop list:test 3
+1) "list:test"
+2) "a"
+
+127.0.0.1:6379> brpop list:test 0
+1) "list:test"
+2) "b"
+```
 
 
-（13）
+
+使用注意：
+
++ 如果是多个键，那么brpop会从左至右遍历建，一旦有一个键能弹出客户端会立刻返回
+
+  ```shell
+  127.0.0.1:6379> brpop list:1 list:2 list:3 0
+  ..阻塞..
+  ```
+
+  此时另一个客户端分别向list:2和list:3插入元素
+
+  ```shell
+  127.0.0.1:6379> lpush list:2 element2
+  (integer) 1
+  
+  127.0.0.1:6379> lpush list:3 element3
+  (integer) 1
+  ```
+  客户端会立刻返回list:2中的element2，因为list:2最先有可以弹出的元素
+  
+  ```shell
+  127.0.0.1:6379> brpop list:1 list:2 list:3 0
+  1) "list:2"
+  2) "element2"
+  (111.14s)
+  ```
+
++ 如果多个客户端对同一个键执行brpop，那么最先执行brpop命令的客户端可以获取弹出的值
+
+  
+
+#### 4.3.3 命令时间复杂度
+
+|命令|时间复杂度|
+|:-----------:|:---:|
+| `rpush key value [value ...]` | `O(k)，k是元素个数` |
+| `lpush key value [value ...]` | `O(k)，k是元素个数` |
+| `linsert key before|after pivot value` | `O(n)，n是pivot距离表头或表尾的距离` |
+| `lrange key start end` | `O(s+n)，s是start偏移量，n是start到end的范围` |
+| `lindex key index` | `O(n)，n是索引的偏移量` |
+| `llen key` | `O(1)` |
+| `lpop key` | `O(1)` |
+| `rpop key` | `O(1)` |
+| `lremkey count value` | `O(n)，n是列表长度` |
+| `ltrim key start end` | `O(n)，n是要剪裁的元素总数`|
+| `lset key index value` | `O(n)，n是索引的偏移量` |
+| `blpop brpop` | `O(1)` |
+
+
+
+#### 4.3.4 内部编码
+
++ ziplist（压缩列表）
+  + 当列表的元素个数小于`list-max-ziplist-entries`配置（默认512个），同时列表中每个元素的值都小于`list-max-ziplist-value`配置时，Redis会选用ziplist来作为列表的内部实现来减少内存的使用
++ linkedlist（链表）
+  + 当列表类型无法满足ziplist的条件时，Redis会使用linkedlist作为列表的内部实现
+
+
+
+#### 4.3.5 使用场景
+
+##### （1）消息队列
+
+Redis的lpush+brpop命令组合即可实现阻塞队列，生产者客户端使用lpush从列表左侧插入元素，多个消息者客户端使用brpop命令阻塞式的抢列表尾部的元素，多个客户端保证了消费的负载均衡和高可用性
+
+##### （2）文章列表
+
+每个用户有属于自己的文章列表，现需要分页展示文章列表。此时可以考虑使用列表，因为列表不但是有序，同时支持按照索引范围获取元素
+
+<img src="./image/Redis消息队列模型.png" align="left">
+
+
+
+> 注：
+>
+> 使用列表类型保存和获取文章列表会存在两个问题：
+>
+> + 如果每次分页获取的文章个数较多，需要执行多次hgetall操作，此时可以考虑使用Pipeline批量获取，或者考虑文章数据序列化为字符串类型，使用mget批量获取
+> + 分页获取文章列表时，lrange命令在列表两端性能较好，但是如果列表较大，获取列表中间范围的元素性能会变差，此时可以考虑做二次拆分，使用Redis3.2的quicklist内部编码实现，结合ziplist和linkedlist的特点，获取列表中间范围的元素时也可以高效完成
+
+
 
 ### 4.4 集合
 
+#### 4.4.1 概述
 
+集合（set）类型是用来保存多个的字符串元素，但和列表类型不一样的是，集合中不允许有重复元素，并且集合中的元素时无序的，不能通过索引下标获取元素。例如“user:1follow”包含着"it"、"music"、"his"和"sports"四个元素，
+
+<img src="./image/集合类型.png" align="left">
+
+**一个集合最多可以存储2^32次方-1个元素**
+
+
+
+#### 4.4.2 命令
+
+0
 
 ### 4.5 有序集合
 
@@ -1017,11 +1133,11 @@ AOF和RDB文件都可以用于服务器重启时的数据恢复
 
 如果突然宕机导致AOF文件尾部写入不全，Redis为我们提供了`aof-load-truncated`配置来兼容这种情况，默认开启。加载AOF时，当遇到此问题时会忽略并继续启动，同时打印如下警告日志:
 
-```
+  ```
 # !!! Warning: short read while loading the AOF file !!!
 # !!! Truncating the AOF at offset ...... !!!
 # AOF loaded anyway because aof-load-truncated is enabled
-```
+  ```
 
 
 
@@ -1309,6 +1425,97 @@ public class PhoneCode {
 
 
 ### 7.2 SpringBoot整合Redis
+
+#### 7.2.1 导入相关依赖
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.apache.commons</groupId>
+    <artifactId>commons-pool2</artifactId>
+    <version>2.11.1</version>
+</dependency>
+```
+
+
+
+#### 7.2.2 配置文件
+
+```yaml
+spring:
+  redis:
+    host:
+    password:
+    port: 6379
+    # Redis 数据库索引（一共有16个数据库，默认为0）
+    database: 0
+    # 链接超时时间（单位毫秒）
+    timeout: 1800000
+    lettuce:
+      pool:
+        # 连接池最大连接数
+        max-active: 20
+        # 最大阻塞等待时间
+        max-wait: -1
+        # 连接池中的最大空闲连接
+        max-idle: 5
+        # 连接池中的最小空闲连接
+        min-idle: 0
+```
+
+
+
+#### 7.2.3 Redis自定义配置类
+
+```java
+@Configuration
+@EnableCaching
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        RedisSerializer<String> redisSerializer = new StringRedisSerializer();
+        Jackson2JsonRedisSerializer jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer(Object.class);
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        objectMapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
+        jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
+        template.setConnectionFactory(factory);
+        template.setKeySerializer(redisSerializer);
+
+        return template;
+    }
+
+    @Bean
+    public CacheManager cacheManager(RedisConnectionFactory factory) {
+        RedisSerializer<String> redisSerializer = new StringRedisSerializer();
+        Jackson2JsonRedisSerializer jackson2JsonRedisSerializer = new Jackson2JsonRedisSerializer(Object.class);
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        objectMapper.enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
+        jackson2JsonRedisSerializer.setObjectMapper(objectMapper);
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofSeconds(600))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(redisSerializer))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jackson2JsonRedisSerializer))
+                .disableCachingNullValues();
+        RedisCacheManager cacheManager = RedisCacheManager.builder(factory)
+                .cacheDefaults(config)
+                .build();
+
+        return cacheManager;
+    }
+}
+```
+
+
 
 
 
