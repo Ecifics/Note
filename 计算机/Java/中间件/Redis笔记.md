@@ -382,9 +382,7 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 + 缓存功能
 
-![Redis+MySQL组成的缓存存储架构](.\image\字符串类型缓存功能.png)
-
-
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E5%AD%97%E7%AC%A6%E4%B8%B2%E7%B1%BB%E5%9E%8B%E7%BC%93%E5%AD%98%E5%8A%9F%E8%83%BD.png" align="left" alt="Redis+MySQL组成的缓存存储架构">
 
 图中是字符串典型的使用场景，其中Redis作为缓存层，MySQL作为存储层，绝大部分请求的数据都是从Redis中获取。由于Redis具有支撑高并发的特点，所以缓存通常能起到加速读写和降低后端压力的作用，例如获取用户数据可以先从Redis中获取数据，如果Redis中没有用户数据，再从MySQL中获取，并将结果写到Redis，添加过期时间
 
@@ -398,13 +396,13 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 + 共享session
 
-![Session分散管理](.\image\session分散管理.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/session%E5%88%86%E6%95%A3%E7%AE%A1%E7%90%86.png" align="left" alt="session分散管理">
 
 如图所示，一个分布式Web服务将用户的Session信息（例如用户登录信息）保存在各自服务器，这样会造成一个问题，处于负载均衡的考虑，分布式服务器会将用户的访问均衡到不同服务器上，用户刷新一次访问可能会发现需要重新登录，这个问题是用户无法容忍的。
 
 为了解决这个问题，可以使用Redis将用户的Session进行集中管理，如下图所示
 
-![Redis集中管理Session](C:\Users\Ecifics\Desktop\Recent Files\笔记\计算机\Java\中间件\image\Redis集中管理Session.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/Redis%E9%9B%86%E4%B8%AD%E7%AE%A1%E7%90%86Session.png" align="left" alt="Redis集中管理Session">
 
 在这种模式下只要保证Redis是高可用和扩展性，每次用户更新或者查询登录信息直接从Redis中集中获取
 
@@ -420,7 +418,7 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 #### 4.2.1 概述
 
-![哈希](C:\Users\Ecifics\Desktop\Recent Files\笔记\计算机\Java\中间件\image\哈希.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E5%93%88%E5%B8%8C.png" align="left" alt="哈希">
 
 哈希类型中的映射关系叫做`field-value`，注意这里的value是指field对应的值，不是键对应的值
 
@@ -590,9 +588,9 @@ OK
 
 哈希类型经常被用来存储用户相关信息。优化用户信息的获取，不需要重复从数据库当中读取，提高系统性能，下面是将用户信息存储在关系型数据库和Redis中的差异
 
-<img src="image/关系型数据库保存用户信息.png" align>
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E5%85%B3%E7%B3%BB%E5%9E%8B%E6%95%B0%E6%8D%AE%E5%BA%93%E4%BF%9D%E5%AD%98%E7%94%A8%E6%88%B7%E4%BF%A1%E6%81%AF.png" align="left" alt="关系型数据库保存用户信息">
 
-<img src="image/使用哈希类型缓存用户信息.png" align>
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E4%BD%BF%E7%94%A8%E5%93%88%E5%B8%8C%E7%B1%BB%E5%9E%8B%E7%BC%93%E5%AD%98%E7%94%A8%E6%88%B7%E4%BF%A1%E6%81%AF.png" align="left" alt="使用哈希类型缓存用户信息">
 
 其中有两点不同之处：
 
@@ -907,7 +905,7 @@ Redis的lpush+brpop命令组合即可实现阻塞队列，生产者客户端使�
 
 每个用户有属于自己的文章列表，现需要分页展示文章列表。此时可以考虑使用列表，因为列表不但是有序，同时支持按照索引范围获取元素
 
-<img src="./image/Redis消息队列模型.png" align="left">
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/Redis%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97%E6%A8%A1%E5%9E%8B.png" align="left" alt="Redis消息队列模型">
 
 
 
@@ -924,17 +922,15 @@ Redis的lpush+brpop命令组合即可实现阻塞队列，生产者客户端使�
 
 #### 4.4.1 概述
 
-集合（set）类型是用来保存多个的字符串元素，但和列表类型不一样的是，集合中不允许有重复元素，并且集合中的元素时无序的，不能通过索引下标获取元素。例如“user:1follow”包含着"it"、"music"、"his"和"sports"四个元素，
+集合（set）类型是用来保存多个的字符串元素，但和列表类型不一样的是，集合中不允许有重复元素，并且集合中的元素时无序的，不能通过索引下标获取元素。例如“user:1follow”包含着"it"、"music"、"his"和"sports"四个元素，**一个集合最多可以存储2^32次方-1个元素**
 
-<img src="./image/集合类型.png" align="left">
-
-**一个集合最多可以存储2^32次方-1个元素**
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E9%9B%86%E5%90%88%E7%B1%BB%E5%9E%8B.png" align="left" alt="集合类型">
 
 
 
 #### 4.4.2 命令
 
-0
+
 
 ### 4.5 有序集合
 
@@ -962,14 +958,22 @@ RDB持久化是把当前进程数据生成快照保存到硬盘的过程，触�
 
 + `save`命令（已废弃，不建议在线上环境使用）
   + 阻塞当前的服务器，直到RDB过程执行完成为止，对于内存比较大的实例会造成长时间的阻塞
+
 + `bgsave`命令（对`save`命令阻塞问题做的优化）
   + Redis进程执行fork操作创建子进程，RDB吃就会过程由子进程负责，完成后自动结束。阻塞只发生在fork创建子进程阶段，一般时间很短
+
   + 执行流程：
-    + ![bgsave命令执行流程](.\image\bgsave命令执行流程.png)
+
+    + <img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/bgsave%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B.png" align="left" alt="bgsave命令执行流程">
+
     + 执行`bgsave`命令，Redis父进程判断当前是否存在正在执行的子进程，如RDB/AOF子进程，如果存在`bgsave`命令直接返回
+
     + 父进程执行fork操作创建子进程，fork操作过程中父进程会阻塞，通过`info status`命令查看`last_fork_usec`选项，可以获取最近一个fork操作的耗时，单位为微秒
+
     + 父进程fork完成后，`bgsave`命令返回 "Background saving started" 信息并不再阻塞父进程，可以继续响应其他命令
+
     + 子进程创建RDB文件，根据父进程内存生成临时快照文件，完成后对原有文件进行原子替换。执行`lastsave`命令可以获取最后一次生成RDB的时间，对于info统计的`rdb_last_save_time`选项。
+
     + 进程发送信号给父进程表示完成，父进程更新统计信息 
 
 ##### 6.2.2.2 自动触发
@@ -1016,15 +1020,16 @@ AOF的主要作用是解决了数据持久化的实时性，目前已经是Redis
 #### 6.3.2 AOF的配置
 开启AOF功能需要在配置文件中配置：`appendonly yes`，默认不开启。
 
-![开启AOF](../../../assets/开启AOF.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E5%BC%80%E5%90%AFAOF.png" align="left" alt="开启AOF">
 
 AOF文件名通过`appendfilename`配置设置，默认文件名是`appendonly.aof`，保存路径同RDB持久化方式一直，通过dir配置指定
 
-![AOF文件名](../../../assets/AOF文件名.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/AOF%E6%96%87%E4%BB%B6%E5%90%8D.png" align="left" alt="AOF文件名">
 
 #### 6.3.3 AOF工作流程
 ##### 6.3.3.1 大概流程
-![AOF工作流程](../../../assets/AOF执行流程.png)
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/AOF%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B.png" align="left" alt="AOF执行流程">
 
 + 所有的写入命令会追加到`aof_buf`（缓冲区）中
 + AOF缓冲区根据对应的策略向硬盘做同步操作
@@ -1100,7 +1105,7 @@ AOF重写过程分为手动触发和自动触发：
 
 AOF重写运行流程
 
-![AOF重写运行流程](../../../assets/AOF重写流程.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/AOF%E9%87%8D%E5%86%99%E6%B5%81%E7%A8%8B.png" align="left" alt="AOF重写流程">
 
 + 执行AOF重写请求
   + 如果当前进程正在进行AOF重写，请求不执行返回如下响应：`ERR Background append only file rewriting already in progress`
@@ -1118,7 +1123,7 @@ AOF重写运行流程
 
 AOF和RDB文件都可以用于服务器重启时的数据恢复
 
-![Redis持久化文件加载过程](../../../assets/Redis持久化文件加载流程.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/Redis%E6%8C%81%E4%B9%85%E5%8C%96%E6%96%87%E4%BB%B6%E5%8A%A0%E8%BD%BD%E6%B5%81%E7%A8%8B.png" align="left" alt="Redis持久化文件加载流程">
 
 + AOF持久化开启并且存在AOF文件时，优先加载AOF文件，打印如下日志：`* DB loaded from append only file: 5.841 seconds`
 + AOF关闭或者AOF文件不存在时，加载RDB文件，打印如下日志：`DB loaded from disk: 5.586 seconds`
@@ -1147,7 +1152,7 @@ AOF和RDB文件都可以用于服务器重启时的数据恢复
 
 当开启AOF持久化时，常用的同步硬盘的策略是everysec，用于平衡性能和数据安全性。对于这种方式，Redis使用另一条线程每秒执行fsync同步硬盘。当系统硬盘资源繁忙时，会造成Redis主线程阻塞
 
-![使用everysec做刷盘策略的流程](../../../assets/使用everysec做刷盘策略的流程.png)
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E4%BD%BF%E7%94%A8everysec%E5%81%9A%E5%88%B7%E7%9B%98%E7%AD%96%E7%95%A5%E7%9A%84%E6%B5%81%E7%A8%8B.png" align="left" alt="使用everysec做刷盘策略的流程">
 
 阻塞流程：
 
@@ -1629,8 +1634,6 @@ double-check查询存储层中的数据到缓存中
 
 ##### （1）保证缓存层服务高可用性
 
-
-
 ##### （2）依赖隔离组件为后端限流并降级
 
 不去访问数据库，直接返回默认数据或访问服务的内存数据
@@ -1639,19 +1642,13 @@ double-check查询存储层中的数据到缓存中
 
 在项目上线前，演练缓存层宕掉后，应用以及后端的负载情况以及可能出现的情况，在此基础上做一些预案
 
-
-
 ##### （4） 构建多级缓存
 
 nginx缓存+redis缓存+其他缓存
 
-
-
 ##### （5）使用锁或者队列
 
 用加锁或者队列的方式来保证不会有大量的线程对数据库一次性进行读写，从而避免失效时大量的并发请求落到底层存储系统上，效率低，不适合高并发情况
-
-
 
 ##### （6）缓存失效时间分散开
 
