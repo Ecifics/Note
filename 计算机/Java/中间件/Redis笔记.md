@@ -897,11 +897,11 @@ timeout：阻塞时间（单位秒）
 
 #### 4.3.5 使用场景
 
-##### （1）消息队列
+（1）消息队列
 
 Redis的lpush+brpop命令组合即可实现阻塞队列，生产者客户端使用lpush从列表左侧插入元素，多个消息者客户端使用brpop命令阻塞式的抢列表尾部的元素，多个客户端保证了消费的负载均衡和高可用性
 
-##### （2）文章列表
+（2）文章列表
 
 每个用户有属于自己的文章列表，现需要分页展示文章列表。此时可以考虑使用列表，因为列表不但是有序，同时支持按照索引范围获取元素
 
@@ -930,7 +930,196 @@ Redis的lpush+brpop命令组合即可实现阻塞队列，生产者客户端使�
 
 #### 4.4.2 命令
 
+##### 集合内操作
 
+（1）`sadd key element [element ...]`：添加元素
+
+返回添加成功的元素个数
+
+```shell
+127.0.0.1:6379> exists myset
+(integer) 0
+127.0.0.1:6379> sadd myset a b c
+(integer) 3
+127.0.0.1:6379> sadd myset a b
+(integer) 0
+```
+
+
+
+（2）`srem key element [element ...]`：删除元素
+
+返回删除成功元素的个数
+
+```shell
+127.0.0.1:6379> srem myset a b
+(integer) 2
+127.0.0.1:6379> srem myset hello
+(integer) 0
+```
+
+
+
+（3）`scard key`：计算元素个数
+
+`scard`的时间复杂度为`O(1)`，**它不会遍历集合所要元素**，而是直接利用Redis内部的变量
+
+```shell
+127.0.0.1:6379> scard myset
+(integer) 1
+```
+
+
+
+（4）`sismember key element`：判断元素是否在集合中
+
+如果给定元素element在集合内返回1，否者返回0
+
+```shell
+127.0.0.1:6379> sismember myset c
+(integer) 1
+```
+
+
+
+（5）`srandmemeber key [count]`：随机从集合返回指定个数元素
+
+[count]是可选参数，如果不写默认为1
+
+```java
+127.0.0.1:6379> sadd myset a d
+(integer) 2
+    
+127.0.0.1:6379> srandmember myset 2
+1) "a"
+2) "d"
+    
+127.0.0.1:6379> srandmember myset
+"c"
+```
+
+
+
+（6）`spop key`：从集合随机弹出元素
+
+```java
+127.0.0.1:6379> spop myset
+"d"
+```
+
+
+
+（7）`smembers key`：获取所有元素，返回结果是 无序的
+
+```shell
+127.0.0.1:6379> smembers myset
+1) "c"
+2) "a"
+```
+
+
+
+#### 集合间操作
+
+初始化两个集合，它们分别是user:1:follow和user:2:follow
+
+```shell
+127.0.0.1:6379> sadd user:1:follow it music his sports
+(integer) 4
+
+127.0.0.1:6379> sadd user:2:follow it news ent sport
+(integer) 4
+```
+
+
+
+（8）`sinter key [key ...]`：求多个集合的交集
+
+```shell
+127.0.0.1:6379> sinter user:1:follow user:2:follow
+1) "it"
+```
+
+
+
+（9）`sunion key [key ...]`：求多个集合的并集
+
+```shell
+127.0.0.1:6379> sunion user:1:follow user:2:follow
+1) "news"
+2) "sport"
+3) "music"
+4) "ent"
+5) "his"
+6) "it"
+7) "sports"
+```
+
+
+
+（10）`sdiff key [key ...]`：求多个集合的差集
+
+```shell
+127.0.0.1:6379> sdiff user:1:follow user:2:follow
+1) "his"
+2) "music"
+3) "sports"
+```
+
+
+
+（11）将交集、并集、差集的结果保存
+
+`sinterstore destination key [key ...]`
+
+`sunionstore destination key [key ...]`
+
+`sdiffstore destination key [key ...]`
+
+集合间的运算在元素较多的情况下会比较耗时，所以Redis提供了三个命令将集合间交集、并集、差集的结果保存在destination key中
+
+```shell
+127.0.0.1:6379> sinterstore user:1_2:inter user:1:follow user:2:follow
+(integer) 1
+
+127.0.0.1:6379> type user:1_2:inter
+set
+
+127.0.0.1:6379> smembers user:1_2:inter
+1) "it"
+```
+
+
+
+#### 4.4.3 集合命令时间复杂度 
+
+| 命令 | 时间复杂度 |
+| :-----------: | :-----: |
+| `sadd key element [element ...]` | `O(k)，k是元素个数` |
+| `srem key element [element ...]` | `O(k)，k是元素个数` |
+| `scard key` | `O(1)` |
+| `sismember key element` | `O(1)` |
+| `srandmemeber key [count]` | `O(count)` |
+| `spop key` | `O(1)` |
+| `smembers key` | `O(n)，n是元素总数` |
+| `sinter key [key ...]` | `O(m * k)，k是多个集合中元素最少的个数` |
+| `sunion key [key ...]` | `O(k)，k是多个集合元素个数和` |
+| `sdiff key [key ...]` | `O(k)，k是多个集合元素个数和` |
+
+
+
+#### 4.4.4 内部编码
+
++ intset（整数集合）：当集合中的元素都是整数且元素个数小于`set-max-intset-entries`配置（默认512个）时，Redis会选用intset来作为集合的内部实现，而减少内存的使用
++ hashtable（哈希表）：当即和无法满足intset条件时，Redis会使用hashtable作为集合的内部实现
+
+
+
+#### 4.4.5 使用场景
+
+集合类型比较典型的使用场景是标签（tag）。例如一个用户可能对娱乐、体育比较感兴趣，另一个用户可能对历史、新闻比较感兴趣，这些兴趣点就是标签。有了这些数据就可以得到喜欢同一个标签的人，以及用户的共同喜好的标签，这些数据对于用户体验以及增强用户黏度比较重要。
+
+一个电子商务的网站会对不同标签的用户做不同类型的推荐，比如对数码产品比较感兴趣的人，在各个页面或者通过邮件的形式给他们推荐最新的数码产品，通常会对网站带来更多的利益。
 
 ### 4.5 有序集合
 
