@@ -1166,24 +1166,253 @@ Redis为zadd命令添加了nx、xx、ch、incr四个选项，使用zadd命令注
 
 **有序集合相比集合提供了排序字段，也产生了相应的代价，zadd的时间复杂度为O(logn)，sadd的时间复杂度为O(1)**
 
-（2）
 
-（3）
 
-（4）
+（2）`zcard key`：计算成员个数
 
-（5）
+和集合类型的`scard`命令一样，`zcard`命令的时间复杂度为O(1)
 
-（6）
+```shell
+127.0.0.1:6379> zcard user:ranking
+(integer) 5
+```
 
-（7）
 
-（8）
 
-（9）
+（3）`zscore key member`：计算某个成员的分数
 
-（10）
+如果成员不存在会返回nil
 
+```shell
+127.0.0.1:6379> zscore user:ranking kris
+"1"
+
+127.0.0.1:6379> zscore user:ranking test
+(nil)
+```
+
+
+
+（4）`zrank key member`和`zrevrank key memeber`：计算成员的排名
+
+`zrank`是从分数从低到高返回排名，`zrevrank`反之（排名从0开始）
+
+```shell
+127.0.0.1:6379> zrank user:ranking kris
+(integer) 0
+
+127.0.0.1:6379> zrevrank user:ranking kris
+(integer) 4
+```
+
+
+
+（5）`zrem key member [member ...]`：删除成员
+
+执行完后返回成功删除的个数
+
+```shell
+127.0.0.1:6379> zrem user:ranking mike
+(integer) 1
+```
+
+
+
+（6）`zincrby key increment member`：增加成员的分数
+
+```shell
+127.0.0.1:6379> zincrby user:ranking 9 tom
+"9"
+127.0.0.1:6379> zincrby user:ranking 9 tom
+"18"
+127.0.0.1:6379> zincrby user:ranking 9 tom
+"27"
+```
+
+返回结果为成员最终分数
+
+
+
+（7）`zrange key start end [withscores]`和`zrevrange key start end [withscores]`：返回指定排名范围的成员
+
+有序集合是按照分值排名，`zrange`是从低到高返回，`zrevrange`反之，加上`withscores`，会返回成员对应的分数
+
+```shell
+127.0.0.1:6379> zrange user:ranking 0 2 withscores
+1) "kris"
+2) "1"
+3) "tom"
+4) "27"
+5) "frank"
+6) "200"
+```
+
+```shell
+127.0.0.1:6379> zrevrange user:ranking 0 2 withscores
+1) "martin"
+2) "250"
+3) "tim"
+4) "220"
+5) "frank"
+6) "200"
+```
+
+
+
+（8）`zrangebyscore key min max [withscores] [limit offset count]`和`zrevrangebyscore key max min [withscores] [limit offset count]`：返回指定分数范围的成员
+
+其中`zrangebyscore`按分数从低到高返回，`zrevrangebyscore`反之，`withscores`选项会同时返回每个成员的分数，`[limit offset count]`选项可以限制输出的起始位置和个数
+
+```shell
+127.0.0.1:6379> zrangebyscore user:ranking 200 221 withscores
+1) "frank"
+2) "200"
+3) "tim"
+4) "220"
+```
+
+```shell
+127.0.0.1:6379> zrevrangebyscore user:ranking 221 200 withscores
+1) "tim"
+2) "220"
+3) "frank"
+4) "200"
+```
+
+
+
+同时min和max还支持开区间（小括号）和闭区间（中括号），-inf和+inf分别代表无限小和无限大
+
+
+
+（9）`zcount key min max`：返回指定分数范围成员个数
+
+```shell
+127.0.0.1:6379> zcount user:ranking 200 220
+(integer) 2
+```
+
+
+
+（10） `zremrangebyrank key start stop`：删除指定排名内的升序元素
+
+```shell
+127.0.0.1:6379> zremrangebyrank user:ranking 0 2
+(integer) 3
+```
+
+
+
+（11）`zremrangebyscore key min max`：删除指定分数范围的成员
+
+```shell
+127.0.0.1:6379> zadd user:ranking 400 ecifics
+(integer) 1
+
+127.0.0.1:6379> zremrangebyscore user:ranking (250 +inf
+(integer) 1
+```
+
+
+
+##### 集合间操作
+
+将下图两个集合导入Redis中
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E6%9C%89%E5%BA%8F%E9%9B%86%E5%90%88user_ranking_1%E5%92%8Cuser_ranking_2.png" align="left" alt="有序集合user_ranking_1和user_ranking_2.png">
+
+```shell
+127.0.0.1:6379> zadd user:ranking:1 1 kris 91 mike 200 frank 220 tim 250 martin 251 tom
+(integer) 6
+
+127.0.0.1:6379> zadd user:ranking:2 8 james 77 mike 625 martin 888 tom
+(integer) 4
+```
+
+
+
+（12）`zinterstore destination numkeys key [key ...] [weights weight [weight ...]] [aggregate sum|min|max]`：交集
+
+命令参数：
+
++ destination：交集计算结果保存到这个键
++ numkeys：需要做交集计算键的个数
++ key [key ...]：需要做交集计算的键
++ weights weight [weight ...]：每个键的权重，在做交集计算时，每个键中的每个member会将自己分数乘以这个权重，每个键的权重默认是1
++ aggregate sum|min|max：计算成员交集后，分值可以按照sum、min、max做汇总，默认是sum
+
+下面操作对user:ranking:1和user:ranking:2做交集，weights和aggregate使用了默认配置
+
+```shell
+127.0.0.1:6379> zinterstore user:ranking:1_inter_2 2 user:ranking:1 user:ranking:2
+(integer) 3
+
+127.0.0.1:6379> zrange user:ranking:1_inter_2 0 -1 withscores
+1) "mike"
+2) "168"
+3) "martin"
+4) "875"
+5) "tom"
+6) "1139"
+```
+
+下面然权重变为0.5，并且聚合效果使用max
+
+```shell
+127.0.0.1:6379> zinterstore user:ranking:1_inter_2 2 user:ranking:1 user:ranking:2 weights 1 0.5 aggregate max
+(integer) 3
+
+127.0.0.1:6379> zrange user:ranking:1_inter_2 0 -1 withscores
+1) "mike"
+2) "91"
+3) "martin"
+4) "312.5"
+5) "tom"
+6) "444"
+```
+
+
+
+（13）`zunionstore destination numkeys key [key ...] [weights weight [weight ...]] [aggregate sum|min|max]`：并集
+
+```shell
+127.0.0.1:6379> zunionstore user:ranking:1_union_2 2 user:ranking:1 user:ranking:2
+(integer) 7
+
+127.0.0.1:6379> zrange user:ranking:1_union_2 0 -1 withscores
+ 1) "kris"
+ 2) "1"
+ 3) "james"
+ 4) "8"
+ 5) "mike"
+ 6) "168"
+ 7) "frank"
+ 8) "200"
+ 9) "tim"
+10) "220"
+11) "martin"
+12) "875"
+13) "tom"
+14) "1139"
+```
+
+
+
+#### 4.5.3 命令时间复杂度
+
+| 命令 | 时间复杂度 |
+| :----: | :----:|
+| `zadd key score member [score memeber ...]` ||
+| `zcard key` ||
+| `zscore key member` ||
+| `zrank key member` `zrevrank key memberq
+`  ||
+|||
+|||
+|||
+|||
+|||
+|||
 
 ## 五、事务
 
