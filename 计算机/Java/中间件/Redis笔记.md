@@ -1402,17 +1402,128 @@ Redis为zadd命令添加了nx、xx、ch、incr四个选项，使用zadd命令注
 
 | 命令 | 时间复杂度 |
 | :----: | :----:|
-| `zadd key score member [score memeber ...]` ||
-| `zcard key` ||
-| `zscore key member` ||
-| `zrank key member` `zrevrank key memberq
-`  ||
-|||
-|||
-|||
-|||
-|||
-|||
+| `zadd key score member [score memeber ...]` | `O(k * logn)，k是添加成员的个数，n是当前有序集合成员个数` |
+| `zcard key` | `O(1)` |
+| `zscore key member` | `O(1)` |
+| `zrank key member` `zrevrank key member` | `O(logn)，n是当前有序集合成员个数` |
+| `zrem key member [member ...]` | `n(k * logn)，k是删除成员的个数，n是当前有序集合成员个数` |
+| `zincrby key increment member` | `n(logn)，n是当前有序集合成员个数` |
+| `zrange key start end [withscores]` `zrevrange key start end [withscores]` | `O(logn + k)，k是要获取的成员个数，n是当前有序集合成员个数` |
+| `zrangebyscore key min max [withscores]` `zrevrangebyscore key max min [withscores]` | `O(logn + k)，k是要获取的成员个数，n是当前有序集合成员个数` |
+| `zcount` | `O(logn)，n是当前有序集合成员个数` |
+| `zremrangebyrank key start end` | `O(logn + k)，k是要删除的成员个数，n是当前有序集合成员个数` |
+| `zremrangebyscore key min max` | `O(logn + k)，k是要删除的成员个数，n是当前有序集合成员个数` |
+| `zinterstore destination numkeys key [key ...]` | `O(n * k) + O(m * logm)，n是成员数最小的有序集合成员个数，k是有序集合的个数，m是结果集中成员个数` |
+| `zunionstore destination numkeys key [key ...]` | `O(n) + O(m * logm)，n是所有有序集合成员个数和，m是结果集中成员个数` |
+
+
+
+#### 4.5.4 内部编码
+
++ ziplist（压缩列表）
+  + 当有序集合的元素个数小于`zset-max-ziplist-entries`配置（默认128个），同时每个元素的值都小于`zset-max-ziplist-value`配置（默认64字节）时，Redis会用ziplist来作为有序集合的内部实现，ziplist可以有效减少内存的使用
++ skiplist（跳跃表）：当ziplist条件不满足时，有序集合会使用skiplist作为内部实现，因为此时ziplist的读写效率会下降
+
+
+
+#### 4.5.5 使用场景
+
+有序集合比较典型的使用场景就是排行榜系统。例如视频网站需要对用户上传的视频做排行榜，榜单的维度可能是多个方面的：按照时间、按照播放数量、按照获得的赞
+
+
+
+### 4.6 键管理
+
+#### 4.6.1 单个键管理
+
+（1）`rename key newkey`：键重命名
+
+```shell
+127.0.0.1:6379> set python jedis
+OK
+
+127.0.0.1:6379> get python
+"jedis"
+
+127.0.0.1:6379> rename python java
+OK
+
+127.0.0.1:6379> get python
+(nil)
+
+127.0.0.1:6379> get java
+"jedis"
+```
+
+上述操作将键python重命名为java，**如果键java已经存在，那么它的值会被覆盖**
+
+```shell
+127.0.0.1:6379> set C cedis
+OK
+
+127.0.0.1:6379> rename C java
+OK
+
+127.0.0.1:6379> get java
+"cedis"
+```
+
+
+
+为了防止被强行rename，Redis提供了renamenx命令，确保只有newkey不存在时候才被覆盖，例如下面操作renamenx时，newkey=python已经存在，返回结果是0代表没有完成重命名
+
+
+
+使用重命名命令时，需要注意：
+
++ 由于重命名键期间会执行del命令删除旧的键，如果键对应的值比较大，会存在阻塞Redis的可能性
++ 如果`rename`和`renamenx`中的key和newkey如果是相同的，在Redis3.2和之前版本返回结果不同
+
+
+
+（2）`randomkey`：随机返回一个键
+
+
+
+#### 4.6.2 遍历键
+
+（1）`keys pattern`：全量遍历键
+
+pattern使用的是glob风格的通配符
+
++ `*`：代表匹配任意字符
++ `?`：代表匹配一个字符
++ `[]`：代表匹配部分字符，例如[1,3]代表匹配1或3，[1-10]匹配1到10的任意数字
++ `\x`：用来做转义，例如要匹配星号、问号需要进行转义
+
+例如`keys [j,r]edis`会匹配以j或者r开头，紧跟edis字符串的所有键
+
+`keys h?ll*`：可以匹配hello和hill两个键
+
+
+
+如果Redis包含了大量的键，执行keys命令很可能会造成Redis阻塞，所以一般建议不要再生产环境下使用keys命令。但有时候有遍历键的需求时，可以：
+
++ 在一个不对外提供服务的Redis从节点上执行，这样不会阻塞到客户端的请求，但是会影响到主从复制
++ 如果确认键值总数确实比较少，可以执行命令
++ 使用scan命令渐进式的遍历所有键，可以有效防止阻塞
+
+
+
+（2）`scan cursor [match pattern] [count number]`：渐进式遍历
+
+与keys命令执行时会遍历所有键不同，scan采用渐进式遍历的方式来解决keys命令可能带来的阻塞问题，每次scan命令的时间复杂度是O(1)，但是要真正实现keys的功能，需要执行多次scan。Redis存储键值对实际使用的是hashtable的数据结构，如下图
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/hashtable%E7%A4%BA%E6%84%8F%E5%9B%BE.png" align="left" alt="hashtable示意图">
+
+
+
+scan方法参数
+
++ cursor
+  + cursor是**必需参数**，cursor是一个游标，第一次遍历从0开始，每次scan遍历完都会返回当前游标的值，直到游标值为0，表示遍历结束
+  + match pattern参数是可选参数，它的作用是做模式的匹配，这点和keys的模式很像
+  + count number是可选参数，它的作用是表明每次要遍历的键个数，默认值是10，此参数可以适当增大
 
 ## 五、事务
 
