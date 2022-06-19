@@ -45,3 +45,26 @@ Windows下为`\`
 如果删除一个文件夹hello以及文件夹内的文件可以使用`rm -rf hello`
 
 如果只想删掉文件夹内的文件，保留文件夹，可以使用`rm -rf hello/*`
+
+
+
+## 五、Shell编程
+
+### 5.1
+
+通过bash sh 或者./shell脚本文件名 以及绝对路径 的方式去执行shell脚本时，会创建一个子shell去执行，如果脚本中的变量不是全局变量，那么在子shell中无法获取，也就无法操作
+
+例如shell脚本文件hello.sh
+
+```shell
+#!/bin/bash
+echo "hello, world"
+echo $my_var
+echo $new_var
+```
+
+其中"hello, world"和my_var都属于全局变量，而new_var属于局部变量
+
+使用`./hello.sh`或者`sh ./hello.sh`不会输出new_var变量中的值，因为在子shell中没有定义这个变量
+
+可以使用`source hello.sh`或者`. hello.sh`来执行，这样不会创建子shell，而在当前shell中执行
