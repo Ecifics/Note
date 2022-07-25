@@ -214,12 +214,40 @@ ERROR 1142 (42000): SELECT command denied to user 'b'@'localhost' for table 'T'
 
 ## 三、 InnoDB
 
-### InnoDB概述
+### 3.1 InnoDB概述
 
 + InnoDB是一个将表中的数据存储到磁盘上的存储引擎
 + InnoDB将数据划分为若干个页，以页作为磁盘和内存之间交互的基本单位。InnoDB的页的大小默认为16KB
 
 
+
+### 3.2 InnoDB记录存储结构
+
+我们平时都是以记录为单位向表中插入数据的，这些记录在磁盘上的存放形式被称为**行格式**或**记录格式**，一条记录也就是表中的一行数据，InnoDB一共有4中不同类型的行格式（记录格式）
+
++ COMPACT
++ REDUNDANT
++ DYNAMIC
++ COMPRESSED
+
+
+
+### 3.3 COMPACT行格式
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/mysql/COMPACT%E8%A1%8C%E6%A0%BC%E5%BC%8F%E7%A4%BA%E6%84%8F%E5%9B%BE.png" align="left" alt="COMPACT行格式" height="100">
+
+
+
++ 记录的额外信息
+
+  + 变长字段长度列表
+    + ​	变长字段是指一些变长的数据类型，例如`VARCHAR(M)`、`VARBINARY(M)`、`TEXT`类型和`BLOB`类型。
+
+  + NULL值列表
+
+  + 记录头信息
+
++ 记录的真实数据 
 
 ## 事务隔离
 
