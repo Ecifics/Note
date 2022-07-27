@@ -332,10 +332,90 @@ Sample output:
 2017-03-30T02:57:10.981502Z 1 [Note] A temporary password is generated for root@localhost: Nm(!pKkkjo68e
 ```
 
-### Step 4 – MySQL Initial Configuration
 
-Execute **mysql_secure_installation** script and follow the wizard. It will prompt for the root password. Use the temporary root password got in the above step.
+
+### 使用临时密码登录MySQL，并修改密码
 
 ```
-/usr/bin/mysql_secure_installation 
+mysql -uroot -p  
 ```
+
+输入上面的临时密码
+
+修改密码规则（mysql5.7默认密码策略要求密码必须是大小写字母数字特殊字母的组合，至少8位，嫌麻烦可以先修改密码规则策略）
+
+```
+set global validate_password_policy=0;
+set global validate_password_length=1;
+```
+
+修改密码
+
+```
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'demo2020';
+```
+
+### 授权其他机器远程登录
+
+```
+GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'demo2020' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+```
+
+
+
+### 设置开机自启动
+
+先退出MySQL
+
+```
+mysql> exit
+```
+设置开机启动，然后重新加载新的unit 配置文件  
+```
+systemctl enable mysqld     
+systemctl daemon-reload
+```
+
+
+
+### 设置MySQL的字符集为UTF-8，另其支持中国
+
+```
+vim /etc/my.cnf
+```
+
+```
+# For advice on how to change settings please see
+# http://dev.mysql.com/doc/refman/5.7/en/server-configuration-defaults.html
+
+[mysqld]
+#
+# Remove leading # and set to the amount of RAM for the most important data
+# cache in MySQL. Start at 70% of total RAM for dedicated server, else 10%.
+# innodb_buffer_pool_size = 128M
+#
+# Remove leading # to turn on a very important data integrity option: logging
+# changes to the binary log between backups.
+# log_bin
+#
+# Remove leading # to set options mainly useful for reporting servers.
+# The server defaults are faster for transactions and fast SELECTs.
+# Adjust sizes as needed, experiment to find the optimal values.
+# join_buffer_size = 128M
+# sort_buffer_size = 2M
+# read_rnd_buffer_size = 2M
+datadir=/var/lib/mysql
+socket=/var/lib/mysql/mysql.sock
+default-storage-engine=INNODB
+character_set_server=utf8
+```
+
+加上最后这两行
+
+重启MySQL
+
+```
+systemctl restart mysqld;
+```
+
