@@ -261,3 +261,81 @@ ERROR 1142 (42000): SELECT command denied to user 'b'@'localhost' for table 'T'
   + 一个事务修改了另一个未提交事务读取的数据
 + 幻读（Phantom）
   + 一个事务先根据某些搜索条件查询出一些记录，在该事务未提交时，另一个事务写入了一些符合哪些搜索条件的记录（例如INSERT、DELETE和UPDATE操作）
+
+
+
+## MySQL安装
+
+### Step 1 – Enable MySQL Repository
+
+First of all, You need to enable MySQL 5.7 community release yum repository on your system. The rpm packages for yum repository configuration are available on MySQL’s official website.
+
+First of all, import the latest MySQL GPG key to your system.
+
+```
+sudo rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022 
+```
+
+Now, use one of the below commands to configure the Yum repository as per your operating system version.
+
+- On CentOS & RHEL 7:
+
+  ```
+  sudo yum localinstall https://dev.mysql.com/get/mysql57-community-release-el7-11.noarch.rpm 
+  ```
+
+- On Fedora 36
+
+  ```
+  sudo dnf install https://dev.mysql.com/get/mysql57-community-release-fc27-11.noarch.rpm 
+  ```
+
+- On Fedora 35
+
+  ```
+  sudo dnf install https://dev.mysql.com/get/mysql57-community-release-fc26-11.noarch.rpm 
+  ```
+
+### Step 2 – Installing MySQL 5.7 Server
+
+As you have successfully enabled MySQL yum repository on your system. Now, install MySQL 5.7 community server using the following commands as per your operating system version.
+
+- On CentOS & RHEL 7:
+
+  ```
+  sudo yum install mysql-community-server 
+  ```
+
+- On Fedora 36/35:
+
+  ```
+  sudo dnf install mysql-community-server 
+  ```
+
+The above command will install the MySQL community server and other dependencies on your system. During the installation process of packages, a temporary password is created and logged to MySQL log files. Use the following command to find your temporary MySQL password.
+
+After installing RPMs, use the following command to start MySQL Service.
+
+```
+sudo systemctl start mysqld 
+```
+
+During the first start, MySQL stores the root account password in log file, That can be found with the followign command.
+
+```
+grep 'A temporary password' /var/log/mysqld.log |tail -1 
+```
+
+Sample output:
+
+```
+2017-03-30T02:57:10.981502Z 1 [Note] A temporary password is generated for root@localhost: Nm(!pKkkjo68e
+```
+
+### Step 4 – MySQL Initial Configuration
+
+Execute **mysql_secure_installation** script and follow the wizard. It will prompt for the root password. Use the temporary root password got in the above step.
+
+```
+/usr/bin/mysql_secure_installation 
+```
