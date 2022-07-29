@@ -519,6 +519,234 @@ JVM会为局部变量表中的每一个Slot都分配一个访问索引，通过�
 
 
 
+#### 动态链接（指向运行时常量池的方法引用）
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/jvm/%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%9B%BE%E7%A4%BA.png" align="left" alt="动态链接图示">
+
+常量池，为了提供一些符号和常量，便于指令的识别
+
+每一个栈帧内部都包含一个指向运行时常量池中该栈帧所属方法的引用。包含这个引用的目的就是为了支持当前方法的代码能够实现动态链接（Dynamic Linking），比如`invokedynamic`指令
+
+在Java源文件被编译到字节码文件中时，所有的变量和方法引用都作为符号引用（Symbolic Reference）保存在class文件的常量池里。比如，描述一个方法调用了另外的其他方法时，就是通过常量池中指向方法的符号引用来表示的
+
+例如下面字节码指令中的`#7`就是符号引用
+
+```
+invokevirtual #7
+```
+
+动态链接的作用就是为了将这些符号引用转换为调用方法的直接引用
+
+
+
+#### 方法的调用
+
+在JVM中，将符号引用转换成调用方法的直接引用与方法的绑定机制相关
+
+##### 动态链接和静态链接
++ 静态链接
+	+ 当一个字节码文件被装载进JVM内部时，如果被调用的目标方法在编译器可知，且运行期保持不变时，这种情况下将调用方法的符号引用转换为直接引用的过程称之为静态链接
+
+
+
++ 动态链接
+	+ 如果被调用方法在编译器无法被确定下来，也就是说，只能够在程序运行期将调用方法的符号引用转换为直接引用，由于这种引用转换过程具备动态性，因此也就被称为动态链接
+
+
+##### 早期绑定和晚期绑定
+静态链接和动态链接对应的方法的绑定机制为：早期绑定（Early Binding）和晚期绑定（Late Binding）。绑定是一个字段、方法或者类在符号引用被替换为直接引用的过程，这仅仅发生一次。
+
++ 早期绑定
+	+ 早期绑定就是指被调用的目标方法如果在编译期可知，且运行期保持不变时，即可将这个方法与所属的类型进行绑定，这样一来，由于明确了被调用的目标方法究竟是哪一个，因此也就可以使用静态链接的方式将符号引用转换为直接引用。
++ 晚期绑定
+	+ 如果被调用的方法在编译期无法被确定下来，只能够在程序运行期根据实际的类型绑定相关的方法，这种绑定方式也就被称之为晚期绑定。
+
+#### 虚方法和非虚方法
++ 如果方法在编译期就确定了具体的调用版本，这个版本在运行时是不可变的。这样的方法称为非虚方法。
++ 静态方法、私有方法、final 方法、实例构造器、父类方法都是非虚方法，其他方法称为虚方法。
+
+
+
+##### 虚拟机中调用方法的指令
+
++ 普通调用指令
+  + invokestatic：调用静态方法，解析阶段确定唯一方法版本
+  + invokespecial：调用<init>方法、私有及父类方法，解析阶段确定唯一方法版本
+  + invokevirtual：调用所有虚方法
+  + invokeinterface：调用接口方法
++ 动态调用指令
+
++ invokedynamic：动态解析出需要调用的方法，然后执行
++ 区别
+  + 前四条指令固化在虚拟机内部，方法的调用执行不可人为干预，而invokedynamic指令则支持由用户确定方法版本
+  + 其中invokestatic指令和invokespecial指令调用的方法称为非虚方法，其余的（final修饰的除外）称为虚方法。
+
+
+
+```java
+/**
+ * 解析调用中非虚方法、虚方法的测试
+ *
+ * invokestatic指令和invokespecial指令调用的方法称为非虚方法
+ */
+class Father {
+    public Father() {
+        System.out.println("father的构造器");
+    }
+
+    public static void showStatic(String str) {
+        System.out.println("father " + str);
+    }
+
+    public final void showFinal() {
+        System.out.println("father show final");
+    }
+
+    public void showCommon() {
+        System.out.println("father 普通方法");
+    }
+}
+
+public class Son extends Father {
+    public Son() {
+        //invokespecial 非虚方法
+        super();
+    }
+
+    public Son(int age) {
+        //invokespecial 非虚方法
+        this();
+    }
+
+    //不是重写的父类的静态方法，因为静态方法不能被重写！
+    public static void showStatic(String str) {
+        System.out.println("son " + str);
+    }
+
+    private void showPrivate(String str) {
+        System.out.println("son private" + str);
+    }
+
+    public void show() {
+        //invokestatic 非虚方法
+        showStatic("baidu.com");
+
+        //invokestatic 非虚方法
+        super.showStatic("good!");
+
+        //invokespecial 非虚方法
+        showPrivate("hello!");
+
+        //invokevirtual
+        //虽然字节码指令中显示为invokevirtual，但因为此方法声明有final，不能被子类重写，所以也认为此方法是非虚方法。
+        showFinal();
+
+        //invokespecial 非虚方法
+        super.showCommon();
+
+        //invokevirtual 虚方法
+        //有可能子类会重写父类的showCommon()方法
+        showCommon();
+        
+        //invokevirtual 虚方法
+      	//info()是普通方法，有可能被重写，所以是虚方法
+        info();
+
+        MethodInterface in = null;
+        //invokeinterface 虚方法
+        in.methodA();
+    }
+
+    public void info() {
+
+    }
+
+    public void display(Father f) {
+        f.showCommon();
+    }
+
+    public static void main(String[] args) {
+        Son so = new Son();
+        so.show();
+    }
+}
+
+interface MethodInterface {
+    void methodA();
+}
+```
+
+
+
+#### 方法重写
+
+步骤： 
+
++ 找到操作数栈的栈顶元素所执行的对象的实际类型，记作C
++ 如果在常量池中找到与类型C描述符和简单名称都相符的方法，则进行权限校验：
+  + 如果通过则返回这个方法的直接引用，查找过程结束
+  + 如果不通过，则返回`java.lang.IllegalAccessError`异常
++ 如果没有在常量池中没有找到相符合方法，则按照继承关系从下往上依次对C的各个父类进行第2步的搜索和验证过程
++ 如果始终没有找到合适的方法，则抛出`java.lang.AbstractMethodError`异常
+
+
+
+##### 虚方法表
+
+在面向对象的编程中，会频繁的使用动态分派（绑定），如果每次动态分派（绑定）都要重新在类的元数据中搜索合适的目标的话可能会影响效率。
+
+因此为了提高性能，JVM采用在**每个类**的方法区建立一个虚方法表，使用索引代替查找，其中存放着各个方法的入口
+
+虚方法表会在类加载的链接阶段被创建并开始初始化，类的变量初始值准备完成之后，JVM会把该类的方法也初始化完毕
+
+
+
+#### 方法返回地址
+
+方法返回地址用来存放调用该方法的PC寄存器的值
+
+
+
+方法退出（无论是正常退出还是出现未处理异常退出），方法退出后都会返回到该方法被调用的位置。
+
++ 方法正常退出时，调用者的pc寄存器的值作为返回地址，即调用该方法的指令的下一条指令
+  + 方法正常调用完成后需要使用哪一个返回指令需要根据方法返回值的实际数据类型而定
+    + `ireturn`：对应boolean、byte、short和int类型
+    + `lreturn`：对应long类型
+    + `freturn`：对应float类型
+    + `dreturn`：对应double类型
+    + `areturn`：对应引用类型
+    + `return`：对应void类型方法、构造方法、雷和接口的
++ 方法异常退出时，返回地址要通过异常表来确定，栈帧中一般不会保存这部分信息
+  + 方法执行过程中抛出异常时的异常处理，存储在一个异常处理表中，方便在发生异常的时候找到处理异常的代码
+  + 如果这个异常没有在方法内处理，也就是本方法的异常表中没有搜索到匹配的异常处理，就会导致方法退出
+
+
+
+本质上，方法的退出就是当前栈帧出栈的过程。此时，需要恢复上层方法的局部变量表、操作数栈、将返回值压入调用者的操作数栈、设置PC寄存器值等，让调用方法继续执行下去
+
+
+
+正常退出和异常退出的区别在于：通过异常退出的不会向它的上层调用者产生任何返回值
+
+
+
+### 3.3 本地方法（Native Method）接口
+
+#### 概念
+
+一个本地方法，也就是用`native`关键字修饰的方法是一个Java调用，非Java代码的接口，是由非Java代码实现的
+
+本届方法接口的作用是融合不同的编程语言为Java所用，它的初衷是融合C/C++程序
+
+
+
+### 3.4 本地方法栈
+
+
+
+
+
 ## 专业名词
 
 + 类变量也叫静态变量，也就是在变量前加了static 的变量

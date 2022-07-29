@@ -359,10 +359,9 @@ ALTER USER 'root'@'localhost' IDENTIFIED BY 'demo2020';
 
 ```
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' IDENTIFIED BY 'demo2020' WITH GRANT OPTION;
-FLUSH PRIVILEGES;
 ```
 
-
+**注意**：不要加上`FLUSH PRIVILEGES;`
 
 ### 设置开机自启动
 
