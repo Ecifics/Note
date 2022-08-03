@@ -264,6 +264,16 @@ ERROR 1142 (42000): SELECT command denied to user 'b'@'localhost' for table 'T'
 
 
 
+### MySQL实现ACID
+
++ 一致性
+  + 用undo log实现
++ 隔离性
+  + 加锁
+  + 隔离级别
++ 持久性
+  + redo log
+
 ## MySQL安装
 
 ### Step 1 – Enable MySQL Repository
