@@ -1179,13 +1179,183 @@ JVM在进行GC时，并非每次都对上面三个内存( 新生代、老年代�
 
 ### 3.6 方法区
 
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/jvm/JVM%E4%B8%AD%E6%96%B9%E6%B3%95%E5%8C%BA.png" width="700px" align="left" alt="JVM方法区">
+
+#### 栈、堆和方法区的交互关系
+
+- Person 类的 .class 信息存放在方法区中
+- person 变量存放在 Java 栈的局部变量表中
+- 真正的 person 对象存放在 Java 堆中
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/jvm/%E5%A0%86%E6%A0%88%E5%92%8C%E6%96%B9%E6%B3%95%E5%8C%BA%E7%9A%84%E4%BA%A4%E4%BA%92.png" align="left" alt="堆栈和方法区的交互">
+
+- 在 person 对象中，有个指针指向方法区中的 person 类型数据，表明这个 person 对象是用方法区中的 Person 类 new 出来的
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/jvm/Person%E5%AF%B9%E8%B1%A1%E5%9C%A8%E5%A0%86%E6%A0%88%E6%96%B9%E6%B3%95%E5%8C%BA%E4%B8%AD%E7%9A%84%E8%A1%A8%E7%A4%BA.jfif" align="left" alt="Person对象在堆栈方法区中的表示">
+
+
+
+#### 方法区的位置
+
+Java虚拟机规范里明确说明：“尽管所有的方法区在逻辑上是属于堆的一部分，但一些简单的实现可能不会选择去进行垃圾收集或者进行压缩”。
+
+但对于HotSpot而言，方法区还有一个别名叫做Non-Heap，目的就是为了和堆分开
+
+
+
+#### 方法区的特点
+
++ 方法区与堆一样，是由各个线程共享的区域
++ 方法区在JVM启动的时候被创建，在JVM关闭的时候释放，它的实际物理内存空间和Java堆区一样都可以是不连续的
++ 方法区的大小是可以选择固定大小和可扩展大小
++ 方法区的大小决定了系统可以保存多少个类，如果系统定义的类太多，导致方法区溢出，虚拟机会抛出内存溢出错误`java.lang.OutOfMemoryError: PermGen space`（JDK7之前）或者`java.lang.OutOfMemoryError:Metaspace`（JDK8之后）
+
+
+
+#### HotSpot中方法区的演进
+
++ 在JDK7之前，习惯性吧方法区称为永久代，从JDK8开始，使用元空间取代了永久代。可以把方法区看成一个接口，而永久代和元空间看成是对方法区这个接口的实现
++ 本质上方法区和永久代并不等价，仅对HotSpot而言
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/jvm/%E6%B0%B8%E4%B9%85%E4%BB%A3%E5%92%8C%E5%85%83%E7%A9%BA%E9%97%B4%E7%A4%BA%E6%84%8F%E5%9B%BE.png" align="left" alt="永久代和元空间示意图">
+
++ 元空间与永久代的最大区别在于：元空间不在虚拟机设置的内存中，而是使用本地内存
++ 永久代和元空间不只是名字变了，内部结构也做了调整
++ 根据Java虚拟机规范指出，如果方法区无法满足新的内存分配需求时，将抛出OOM异常
+
+
+
+#### 设置方法区大小
+
++ JDK7以及之前版本
+
+  - 通过`-XX:Permsize`来设置永久代初始分配空间。默认值是20.75M
+
+  - `-XX:MaxPermsize`来设定永久代最大可分配空间。32位机器默认是64M，64位机器模式是82M
+
+  - 当JVM加载的类信息容量超过了这个值，会报异常`OutofMemoryError:PermGen space`
+
++ JDK8以及之后版本
+
+  + 元数据区的大小可以使用参数`-XX:MetaspaceSize`和`-XX:MaxMetaspaceSize`指定
+
+    + `-XX:MetaspaceSize`: The default size depends on the platform.Sets the size of the allocated class metadata space that will trigger a garbage collection the first time it is exceeded. This threshold for a garbage collection is increased or decreased depending on the amount of metadata used. 
+
+      + 超过对应值会执行Full GC，重新设置该值，如果释放的空间太少，那么会在不超过`-XX:MaxMetaspaceSize`的情况下适当提高该值，如果释放空间过多，则应该适当降低该值
+
+    + `-XX:MaxMetaspaceSize`: Sets the maximum amount of native memory that can be allocated for class metadata. By default, the size is not limited. The amount of metadata for an application depends on the application itself, other running applications, and the amount of memory available on the system.
+
+      The following example shows how to set the maximum class metadata size to 256 MB:
+
+      ```
+      -XX:MaxMetaspaceSize=256m
+      ```
+
+  + 如果`-XX:MetaspaceSize`设置的值过小，则会发生多次垃圾回收并对该值做出调整，为了避免频繁的Full GC，应该将该值的初始值设置为较高的值
+
+
+
+#### 方法区的内部结构
+
+方法区用于存储已被虚拟机加载的类型信息、常量、静态变量、即时编译器（JIT）后的代码缓存等
+
+类型信息包含了域信息和方法信息
+
+
+
+#### 类型信息
+
+对每个加载的类型（类class、接口interface、枚举类enum和注解类annotation），JVM必须在方法区中存储一下信息：
+
++ 这个类型的完整有效名称（包名+类名）
++ 这个类型的直接父类的完整有效名（对于interface或者java.lang.Object都没有父类）
++ 这个类型的修饰符（public、abstract或者final等等）
++ 这个类型直接接口的一个有序列表
+
+
+
+#### 域（Field）信息
+
++ JVM必须在方法中保存类型的所有域的相关信息以及域的声明顺序
++ 域的相关信息包括
+  + 域名称
+  + 域类型
+  + 域修饰符（public、private、protected、static、final、volatile、transient等）
+
+
+
+#### 方法（Method信息）
+
+JVM必须保存所有方法的以下信息，同域信息一样包括声明顺序
+
++ 方法名称
++ 方法的返回类型
++ 方法参数的数量和类型（按顺序）
++ 方法的修饰符
++ （public、private、protected、static、final、synchronized等）
++ 方法的字节码、操作数栈、局部变量表及大小（abstract和native方法除外）
++ 异常表（abstract和native方法除外）
+  + 每个异常处理的开始位置、结束位置、代码处理在程序计数器中的偏移地址、被捕获的异常类的常量池索引
+
+
+
+#### 类变量
+
+静态变量和类相关联，随着类的加载而加载
+
+用final修饰的类变量在编译阶段就完成了赋值而不用等到类加载的时候才赋值，没有final修饰的类变量则是在类加载过程中的准备阶段赋一个零值，初始化阶段才完成最终赋值
 
 
 
 
 
 
-<img src="" align="left" alt="">
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
+
+
+
+<img src="" align="left" alt="新生区GC">
+
+
 
 
 
