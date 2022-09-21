@@ -382,7 +382,7 @@ Redis会根据当前值的类型和长度决定使用哪种内部编码实现
 
 + 缓存功能
 
-<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E5%AD%97%E7%AC%A6%E4%B8%B2%E7%B1%BB%E5%9E%8B%E7%BC%93%E5%AD%98%E5%8A%9F%E8%83%BD.png" align="left" alt="Redis+MySQL组成的缓存存储架构">
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/redis/%E5%AD%97%E7%AC%A6%E4%B8%B2%E7%B1%BB%E5%9E%8B%E7%BC%93%E5%AD%98%E5%8A%9F%E8%83%BD.png" align="left" alt="Redis+MySQL组成   的缓存存储架构">
 
 图中是字符串典型的使用场景，其中Redis作为缓存层，MySQL作为存储层，绝大部分请求的数据都是从Redis中获取。由于Redis具有支撑高并发的特点，所以缓存通常能起到加速读写和降低后端压力的作用，例如获取用户数据可以先从Redis中获取数据，如果Redis中没有用户数据，再从MySQL中获取，并将结果写到Redis，添加过期时间
 

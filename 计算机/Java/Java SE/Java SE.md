@@ -67,13 +67,15 @@ public class Employee {
 
 
 
-### 1.4 调用构造器的具体处理步骤
+### 1.4 类和对象的初始化顺序
 
-+ 如果构造器的第一行调用了另一个构造器，则基于所提供的参数执行第二个构造器
-+ 否则，
-  + 所有数据字段初始化为其默认值（0，false或null）
-  + 按照在类声明中出现的顺序，执行所有字段初始化方法和初始化块（在类中用`{}`单独包裹起来的代码）
-+ 执行构造器主体代码
++ 类的初始化
+  + 首先初始化其父类的static字段和static块
+  + 初始化该类的static字段或者static块
++ 子类构造函数（第一行默认调用super()来调用父类构造函数，故需要跳到第三步）
+
++ 父类构造函数
++ 继续子类的构造函数
 
 
 
@@ -205,11 +207,61 @@ if (employees[0] instanceof Manager) {
 + protected - 对本包和所有子类可见
 + 默认（不需要修饰符）- 对本包可见
 
+
+
+### 2.7 多态
+
+我们在编译期，只能调用父类中声明的方法，但在运行期，我们实际执行的是子类重写父类的方法。
+
+
+
+#### 示例1
+
+```java
+class Base {
+	int count = 10;
+
+	public void display() {
+		System.out.println(this.count);
+	}
+}
+
+class Sub extends Base {
+	int count = 20;
+
+	public void display() {
+		System.out.println(this.count);
+	}
+}
+
+public class FieldMethodTest {
+	public static void main(String[] args) {
+		Sub s = new Sub();
+		System.out.println(s.count);//20
+		s.display();//20
+		
+		Base b = s;//多态性
+		//==：对于引用数据类型来讲，比较的是两个引用数据类型变量的地址值是否相同
+		System.out.println(b == s);//true
+		System.out.println(b.count);//10
+		b.display();//20
+	}
+}
+```
+
+
+
+若子类重写了父类方法，就意味着子类里面定义的方法彻底覆盖了父类里的同名方法，系统将不可能把父类里的方法转移到子类中：编译看左边，运行看右边
+
+**对于实例变量则不存在这样的现象，即使子类里定义了与父类完全相同的实例变量，这个实例变量依然不可能覆盖父类中定义的实例变量：编译运行都看左边**
+
+
+
 ## 三、 接口
 
 ### 3.1 接口的属性
 
-+ 接口的方法始终是public，故可以省略public声明
++  接口的方法始终是public，故可以省略public声明
 + 接口中的字段始终是public static final
 
 ### 3.2 克隆
