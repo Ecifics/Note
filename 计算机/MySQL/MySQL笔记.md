@@ -249,6 +249,16 @@ ERROR 1142 (42000): SELECT command denied to user 'b'@'localhost' for table 'T'
 
 + 记录的真实数据 
 
+
+
+## 四、索引
+
+### 4.1 聚簇索引
+
+
+
+
+
 ## 事务隔离
 
 ### 一致性问题
