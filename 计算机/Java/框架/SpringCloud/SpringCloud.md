@@ -553,3 +553,535 @@ public class FooConfiguration {
 }
 ```
 
+
+
+## 四、服务降级、服务限流和服务熔断
+
+### 4.1 概述
+
+#### 服务降级（Fallback pattern）
+
+Fallback provides an alternative solution during a service request failure. When the circuit breaker trips and the circuit is open, a fallback logic can be started instead. The fallback logic typically does little or no processing, and return value. Fallback logic must have little chance of failing, because it is running as a result of a failure to begin with.
+
+
+
+#### 服务限流（Bulkhead pattern）
+
+If the hull of a ship is compromised, only the damaged section fills with water, which prevents the ship from sinking. This kind of partitioning approach is used in microservice architecture to isolate failure to small portions of the system. The service boundary serves as a bulkhead to isolate any failures. Breaking out functionality into separate services isolate the effect of failure in the service itself. But this isolation is not enough because our services consume each other. With each service having one or more consumers. Excessive load or failure in a service will impact all consumers of the service.
+
+Some implementation of Bulkhead pattern resolve the problem by **limiting the number of concurrent calls** to a component. This way, the number of resources (typically threads) that is waiting for a reply from the component is limited.
+
+
+
+#### 服务熔断（Circuit breaker pattern）
+
+In his excellent book "Release It", Michael Nygard popularized the circuit breaker pattern to prevent catastrophic failure cascade. The basic idea behind the circuit breaker is very simple. You wrap a protected function call in a circuit breaker object, which monitors for failures. Once the failures **reach a certain threshold**, the circuit breaker trips, and all further calls to the circuit breaker return with an error, without the protected call being made at all. Usually you'll also want some kind of monitor alert if the circuit breaker trips.
+
+
+
+### 4.2 项目搭建
+
+#### 支付服务 cloud-provider-hystrix-payment8001
+
+pom.xml
+
+```xml
+<dependencies>
+    <!-- hystrix-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+    </dependency>
+    <!-- 引用自己定义的api通用包，可以使用Payment支付Entity -->
+    <dependency>
+        <groupId>com.ecifics.springcloud</groupId>
+        <artifactId>cloud-api-commons</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!--监控-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!--eureka client-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+    <!--热部署-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <!--   一个Java工具包     -->
+    <dependency>
+        <groupId>cn.hutool</groupId>
+        <artifactId>hutool-all</artifactId>
+        <version>5.1.0</version>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+application.yaml
+
+```yaml
+server:
+  port: 8001
+
+
+spring:
+  application:
+    name: cloud-provider-hystrix-payment
+
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+```
+
+
+
+主启动类
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class PaymentHystrixMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentHystrixMain8001.class, args);
+    }
+}
+```
+
+
+
+Controller
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/payment")
+public class PaymentController {
+
+    @Resource
+    private PaymentService paymentService;
+
+    @Value("${server.port}")
+    private String serverPort;
+
+    @GetMapping("/hystrix/ok/{id}")
+    public String paymentInfoOK(@PathVariable("id") Integer id) {
+        String result = paymentService.paymentInfoOK(id);
+        log.info("result: {}", result);
+        return result;
+    }
+
+    @GetMapping("/hystrix/timeout/{id}")
+    public String paymentInfoTimeout(@PathVariable("id") Integer id) {
+        String result = paymentService.paymentInfoTimeout(id);
+        log.info("result: {}", result);
+        return result;
+    }
+}
+```
+
+
+
+
+
+#### 订单服务 cloud-consumer-feign-hystrix-order80
+
+相关依赖
+
+```xml
+<dependencies>
+    <!-- openfeign -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+    <!--   hystrix     -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+    </dependency>
+    <!--eureka client-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+    <!-- 引用自己定义的api通用包，可以使用Payment支付Entity -->
+    <dependency>
+        <groupId>com.ecifics.springcloud</groupId>
+        <artifactId>cloud-api-commons</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!--热部署-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+application.yaml
+
+```yaml
+server:
+  port: 80
+
+
+eureka:
+  client:
+    register-with-eureka: false
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+```
+
+
+
+主启动类
+
+```java
+@EnableEurekaClient
+@EnableFeignClients
+@SpringBootApplication
+public class OrderHystrixMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderHystrixMain80.class, args);
+    }
+}
+```
+
+
+
+service接口，实现客户端负载均衡
+
+```java
+@Component
+@RequestMapping("/payment")
+@FeignClient(value = "CLOUD-PROVIDER-HYSTRIX-PAYMENT")
+public interface OrderHystrixService {
+
+    @GetMapping("/hystrix/ok/{id}")
+    String paymentInfoOK(@PathVariable("id") Integer id);
+
+    @GetMapping("/hystrix/timeout/{id}")
+    String paymentInfoTimeout(@PathVariable("id") Integer id);
+}
+```
+
+
+
+controller，处理请求
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/payment/hystrix")
+public class OrderHystrixController {
+
+    @Resource
+    private OrderHystrixService orderHystrixService;
+
+    @GetMapping("/ok/{id}")
+    public String paymentInfoOK(@PathVariable("id") Integer id) {
+        return orderHystrixService.paymentInfoOK(id);
+    }
+
+    @GetMapping("/timeout/{id}")
+    String paymentInfoTimeout(@PathVariable("id") Integer id) {
+        return orderHystrixService.paymentInfoTimeout(id);
+    }
+}
+```
+
+
+
+### 4.3 Hystrix
+
+#### 概述
+
+对于上述两个服务，如果通过订单服务调用支付服务的请求过多，可能会造成服务卡顿，响应时间过长，影响用户体验，为此，引入Hystrix对这种情况进行处理
+
+
+
+#### 服务端Payment服务降级（不推荐）
+
+为了增加用户体验，如果响应时间过长，返回响应的提示信息
+
+
+
+通过@HystrixCommand注解来进行服务降级，此时如果paymentInfoTimeout处理时间超出了10秒（`@HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "10000"`这里限制了处理时间最长为10秒），会触发fallbackMethod属性指定的方法
+
+```java
+@Service
+public class PaymentServiceImpl implements PaymentService {
+
+    @Override
+    public String paymentInfoOK(Integer id) {
+        return "线程池：" + Thread.currentThread().getName() + " paymentInfoOK, id :" + id;
+    }
+
+    @Override
+    @HystrixCommand(fallbackMethod = "paymentInfoTimeoutHandler", commandProperties = {
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "10000")
+    })
+    public String paymentInfoTimeout(Integer id) {
+        int time = 6;
+        try {
+            TimeUnit.SECONDS.sleep(time);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        String result = "线程池：" + Thread.currentThread().getName() + " paymentInfoTimeout, id :" + id;
+        result += "  耗时(秒)：" + time;
+        return result;
+    }
+
+    // 作为paymentInfoTimeout的降级方法处理
+    private String paymentInfoTimeoutHandler(Integer id) {
+        String result = "线程池：" + Thread.currentThread().getName() + " paymentInfoTimeoutHandler, id :" + id;
+        result += "降级";
+        return result;
+    }
+}
+```
+
+> @HystrixCommand：
+>
+> + fallbackMethod：用于指定处理例如响应超时或者运行时异常（例如一个不为零的数除以0）的方法
+> + commandProperties：用于对当前服务进行一定的限制，一旦超过这个限制（例如上述超出上述代码中时间限制10秒），会触发调用fallbackMethod指定的方法。
+
+
+
+主启动类上添加@EnableCircuitBreaker，开启熔断器
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+@EnableCircuitBreaker
+public class PaymentHystrixMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentHystrixMain8001.class, args);
+    }
+}
+```
+
+
+
+#### 消费端（客户端）Order服务降级（推荐）
+
+虽然消费端和服务端都可以进行服务降级，但是更加推荐在消费端，也就是客户端这边进行服务降级。
+
+
+
+添加配置文件内容
+
+```yaml
+feign:
+  hystrix:
+    enabled: true
+
+hystrix:
+  command:
+    default:
+      execution:
+        isolation:
+          thread:
+            timeoutInMilliseconds: 15000
+            
+ribbon:
+  ReadTimeout: 15000
+  ConnectTimeout: 15000
+```
+
+> 这个限制了最长响应时间为15秒，因为@FeignClient注解会自动设置Hystrix的相应时间限制为1s，故需要单独配置
+
+
+
+主启动类上加上@EnableHystrix注解
+
+```java
+@EnableHystrix
+@EnableEurekaClient
+@EnableFeignClients
+@SpringBootApplication
+public class OrderHystrixMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderHystrixMain80.class, args);
+    }
+}
+```
+
+
+
+在Controller对应方法上添加@HystrixCommand注解进行服务降级处理，此处限制相应时间必须在10秒内
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/payment/hystrix")
+public class OrderHystrixController {
+
+    @Resource
+    private OrderHystrixService orderHystrixService;
+
+    @GetMapping("/ok/{id}")
+    public String paymentInfoOK(@PathVariable("id") Integer id) {
+        return orderHystrixService.paymentInfoOK(id);
+    }
+
+    @GetMapping("/timeout/{id}")
+    @HystrixCommand(fallbackMethod = "paymentInfoTimeoutHandler", commandProperties = {
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "10000")
+    })
+    public String paymentInfoTimeout(@PathVariable("id") Integer id) {
+        return orderHystrixService.paymentInfoTimeout(id);
+    }
+
+    // 作为paymentInfoTimeout的降级方法处理
+    private String paymentInfoTimeoutHandler(Integer id) {
+        return "客户端80端口，对方支付系统繁忙，轻稍后再试！";
+    }
+}
+```
+
+
+
+#### 问题
+
++ 如果为每一个方法都配上一个服务降级方法，那么会引起代码量剧增
++ 和业务逻辑混在一起，会造成一定的混乱
+
+
+
+#### 代码量剧增解决方案
+
+添加一个全局fallback方法，这样没有特殊要求，那么所有方法发生服务降级都将采用这个默认的全局方法，我们通过在类上添加@DefaultProperties注解来指定统一处理服务降级的方法，这样**对所有加上@HystrixCommand的方法发生服务降级时会进行处理**
+
+```java
+@Slf4j
+@RestController
+@RequestMapping("/consumer/payment/hystrix")
+@DefaultProperties(defaultFallback = "paymentGlobalFallbackMethod")
+public class OrderHystrixController {
+
+    @Resource
+    private OrderHystrixService orderHystrixService;
+
+    @GetMapping("/ok/{id}")
+    public String paymentInfoOK(@PathVariable("id") Integer id) {
+        return orderHystrixService.paymentInfoOK(id);
+    }
+
+    @GetMapping("/timeout/{id}")
+    @HystrixCommand(commandProperties = {
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "10000")
+    })
+    public String paymentInfoTimeout(@PathVariable("id") Integer id) {
+        return orderHystrixService.paymentInfoTimeout(id);
+    }
+
+    // 作为paymentInfoTimeout的降级方法处理
+    private String paymentInfoTimeoutHandler(Integer id) {
+        return "客户端80端口，对方支付系统繁忙，轻稍后再试！";
+    }
+
+    public String paymentGlobalFallbackMethod() {
+        return "全局异常处理！";
+    }
+}
+```
+
+> 此时，如果paymentInfoTimeout方法出现了响应时间太长或者服务提供方宕机，就会统一调用paymentGlobalFallbackMethod()方法进行服务降级处理
+
+
+
+
+
+#### Hystrix服务熔断
+
+Hystrix对服务熔断，会按照一定时间内，正确执行请求的比例低于某个阈值或者请求次数超出了某个阈值，会发生熔断，此时任务请求都会被熔断方法处理，之后过一段时间，会逐渐尝试后续请求，如果成功，则逐步恢复功能，否则继续保持熔断状态。
+
+
+
+下面paymentCircuitBreaker方法上面，通过@HystrixProperty设置了发生熔断的条件，也就是10秒内如果请求超过10次或者正确执行请求的比例低于60%，那么会发生熔断，执行paymentCircuitBreakerFallback方法
+
+```java
+@Service
+public class PaymentServiceImpl implements PaymentService {
+    ...
+
+    @Override
+    @HystrixCommand(fallbackMethod = "paymentCircuitBreakerFallback", commandProperties = {
+            @HystrixProperty(name = "circuitBreaker.enabled", value = "true"),
+            @HystrixProperty(name = "circuitBreaker.requestVolumeThreshold", value = "10"),
+            @HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds", value = "10000"),
+            @HystrixProperty(name = "circuitBreaker.errorThresholdPercentage", value = "60")
+    })
+    public String paymentCircuitBreaker(Integer id) {
+        if (id < 0) {
+            throw new RuntimeException("Id 不能为负数");
+        }
+
+        String serialNumber = IdUtil.simpleUUID();
+        return Thread.currentThread().getName() + "调用成功，序列号：" + serialNumber;
+    }
+    
+    private String paymentCircuitBreakerFallback(Integer id) {
+        return "id 不能为服务，请重新输入， id = " + id;
+    }
+    
+    ...
+}
+```
+
+
+
+## 五、网关
+
