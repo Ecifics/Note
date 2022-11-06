@@ -1085,3 +1085,152 @@ public class PaymentServiceImpl implements PaymentService {
 
 ## 五、网关
 
+### 5.1 概述
+
+网关提供的是一个调用具体微服务的入口，例如公司门禁，只有符合特定条件（例如公司员工）才能进入。
+
+
+
+### 5.2 Gateway
+
+#### Glossary
+
+- **Route**: The basic building block of the gateway. It is defined by an ID, a destination URI, a collection of predicates, and a collection of filters. A route is matched if the aggregate predicate is true.
+- **Predicate**: This is a [Java 8 Function Predicate](https://docs.oracle.com/javase/8/docs/api/java/util/function/Predicate.html). The input type is a [Spring Framework `ServerWebExchange`](https://docs.spring.io/spring/docs/5.0.x/javadoc-api/org/springframework/web/server/ServerWebExchange.html). This lets you match on anything from the HTTP request, such as headers or parameters.
+- **Filter**: These are instances of [`GatewayFilter`](https://github.com/spring-cloud/spring-cloud-gateway/tree/main/spring-cloud-gateway-server/src/main/java/org/springframework/cloud/gateway/filter/GatewayFilter.java) that have been constructed with a specific factory. Here, you can modify requests and responses before or after sending the downstream request.
+
+
+
+#### How it works
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/SpringCloud/Gateway%E5%B7%A5%E4%BD%9C%E5%8E%9F%E7%90%86.png" align="left" alt="Gateway工作原理">
+
+Clients make requests to Spring Cloud Gateway. If the Gateway Handler Mapping determines that a request matches a route, it is sent to the Gateway Web Handler. This handler runs the request through a filter chain that is specific to the request. The reason the filters are divided by the dotted line is that filters can run logic both before and after the proxy request is sent. All “pre” filter logic is executed. Then the proxy request is made. After the proxy request is made, the “post” filter logic is run.
+
+
+
+#### 项目搭建
+
+相关依赖
+
+```xml
+<dependencies>
+    <!--gateway-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-gateway</artifactId>
+    </dependency>
+    <!-- 引用自己定义的api通用包，可以使用Payment支付Entity -->
+    <dependency>
+        <groupId>com.angenin.springcloud</groupId>
+        <artifactId>cloud-api-commons</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <!--eureka client(通过微服务名实现动态路由)-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+    <!--热部署-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+配置文件
+
+```yaml
+server:
+  port: 9527
+
+spring:
+  application:
+    name: cloud-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: payment_route # 路由的id,没有规定规则但要求唯一,建议配合服务名
+          #匹配后提供服务的路由地址
+          uri: http://localhost:8001
+          predicates:
+            - Path=/payment/get/** # 断言，路径相匹配的进行路由
+
+        - id: payment_route2
+          uri: http://localhost:8001
+          predicates:
+            - Path=/payment/lb/** #断言,路径相匹配的进行路由
+
+eureka:
+  instance:
+    hostname: cloud-gateway-service
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka/
+```
+
+
+
+主启动类
+
+```java
+@SpringBootApplication
+@EnableEurekaClient
+public class GatewayMain9527 {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayMain9527.class, args);
+    }
+}
+```
+
+
+
+配置完成后，通过localhost:9527来访问对应的payment服务
+
+
+
+#### 实现动态路由
+
+Gateway根据注册中心的服务列表，根据服务名称为路径进行路由，而不是根据主机名和端口号进行路由，修改后的配置如下
+
+```yaml
+spring:
+  application:
+    name: cloud-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true  #开启从注册中心动态创建路由的功能，利用微服务名称进行路由(默认false)
+      routes:
+        - id: payment_route #路由的id,没有规定规则但要求唯一,建议配合服务名
+#          uri: http://localhost:8001  #匹配后提供服务的路由地址
+          uri: lb://cloud-payment-service
+          predicates:
+            - Path=/payment/get/** #断言，路径相匹配的进行路由
+
+        - id: payment_route2
+#          uri: http://localhost:8001
+          uri: lb://cloud-payment-service
+          predicates:
+            - Path=/payment/lb/** #断言,路径相匹配的进行路由
+```
+
+> 启动lb表示启动gateway负载均衡的意思
