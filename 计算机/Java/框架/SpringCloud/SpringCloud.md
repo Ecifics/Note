@@ -1234,3 +1234,506 @@ spring:
 ```
 
 > 启动lb表示启动gateway负载均衡的意思
+
+
+
+## 六、Nacos
+
+### 6.1 服务注册
+
+#### 服务提供者项目搭建
+
+服务提供者有cloudalibaba-provider-payment9001和cloudalibaba-provider-payment9002两个，搭建方式相同，下面以cloudalibaba-provider-payment9001搭建来举例
+
+
+
+项目依赖
+
+```xml
+<dependencies>
+    <!--SpringCloud Alibaba nacos-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+配置文件
+
+```yaml
+server:
+  port: 9001
+
+
+spring:
+  application:
+    name: nacos-payment-provider
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  #配置的Nacos地址
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+
+
+主启动类
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class PaymentMain9001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain9001.class, args);
+    }
+}
+```
+
+
+
+Controller
+
+```java
+@RestController
+public class PaymentController {
+
+    @Value("${server.port}")
+    private String serverPort;
+
+    @GetMapping(value = "/payment/nacos/{id}")
+    public String getPayment(@PathVariable("id") Integer id) {
+        return "nacos registry, serverPort: " + serverPort + ", id: " + id;
+    }
+}
+```
+
+
+
+#### 服务消费者项目搭建
+
+依赖
+
+```xml
+<dependencies>
+    <!--SpringCloud Alibaba nacos-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+    <!-- 引用自己定义的api通用包，可以使用Payment支付Entity -->
+    <dependency>
+        <groupId>com.ecifics.springcloud</groupId>
+        <artifactId>cloud-api-commons</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+配置文件
+
+```yaml
+server:
+  port: 83
+
+
+spring:
+  application:
+    name: nacos-order-consumer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  #配置的Nacos地址
+
+
+#消费者要访问的微服务名称（成功注册进nacos的服务提供者）
+service-url:
+  nacos-user-service: http://nacos-payment-provider
+```
+
+
+
+主启动类
+
+```java
+@EnableDiscoveryClient
+@SpringBootApplication
+public class OrderNacosMain83 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderNacosMain83.class, args);
+    }
+}
+```
+
+
+
+远程服务调用配置，这里用的是RestTemplate，也可以使用OpenFeign
+
+```java
+@Configuration
+public class ApplicationContextConfig {
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+
+
+Controller
+
+```java
+@Slf4j
+@RestController
+public class OrderController {
+
+    @Resource
+    private RestTemplate restTemplate;
+
+    @Value("${service-url.nacos-user-service}")
+    private String serverURL;
+
+    @GetMapping("/consumer/payment/nacos/{id}")
+    public String paymentInfo(@PathVariable("id") Integer id) {
+        return restTemplate.getForObject(serverURL + "/payment/nacos/" + id, String.class);
+    }
+}
+```
+
+
+
+### 6.2 配置中心
+
+#### 配置中心概述
+
+配置中心是一个独立的微服务应用，用于为各个不同的微服务应用提供一个中心化的外部配置。
+
+客户端根据制定的配置中心，并根据自己的业务需要从配置中心获取配置信息。
+
+SpringBoot配置文件，bootstrap.yaml优先级高于application.yaml，关于这两个的用途，参考stackoverflow帖子
+
+> ### `bootstrap.yml` or `bootstrap.properties`
+>
+> It's only used/needed if you're using ***Spring Cloud\*** and your application's configuration is stored on a remote configuration server (e.g. Spring Cloud Config Server).
+>
+> From the documentation:
+>
+> > A Spring Cloud application operates by creating a "bootstrap" context, which is a parent context for the main application. ***Out of the box it is responsible for loading configuration properties from the external sources\***, and also decrypting properties in the local external configuration files.
+>
+> Note that the `bootstrap.yml` or `bootstrap.properties` *can* contain additional configuration (e.g. defaults) but generally you only need to put bootstrap config here.
+>
+> Typically it contains two properties:
+>
+> - location of the configuration server (`spring.cloud.config.uri`)
+> - name of the application (`spring.application.name`)
+>
+> Upon startup, Spring Cloud makes an HTTP call to the config server with the name of the application and retrieves back that application's configuration.
+>
+> ### `application.yml` or `application.properties`
+>
+> Contains standard application configuration - typically default configuration since any configuration retrieved during the bootstrap process will override configuration defined here.
+
+
+
+#### 动态刷新
+
+如果配置中心中的配置文件发生了改变，那么使用这个配置中心的服务中的配置文件也需要同时改变，实现这个的功能叫做动态刷新。我们在需要使用配置中心文件内容的类上加上`@RefreshScope`注解
+
+
+
+#### 配置中心项目搭建
+
+依赖
+
+```xml
+<dependencies>
+    <!-- nacos config-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+    </dependency>
+    <!-- openfeign -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+    <!--SpringCloud Alibaba nacos-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+配置文件
+
+bootstrap.yaml
+
+```yaml
+server:
+  port: 3377
+
+spring:
+  application:
+    name: nacos-config-client
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 #Nacos服务注册中心地址
+      config:
+        server-addr: localhost:8848 #Nacos作为配置中心地址
+        file-extension: yaml #指定yml格式配置
+```
+
+application.yaml
+
+```yaml
+spring:
+  profiles:
+    active: test #
+```
+
+
+
+主启动类
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class NacosConfigClientMain3377 {
+    public static void main(String[] args) {
+        SpringApplication.run(NacosConfigClientMain3377.class, args);
+    }
+}
+```
+
+
+
+Controller
+
+```java
+@RefreshScope   //支持Nacos的动态刷新功能
+@RestController
+public class ConfigClientController {
+
+    @Value("${config.info}")
+    private String configInfo;
+
+
+    @GetMapping("/config/info")
+    public String getConfigInfo(){
+        return configInfo;
+    }
+}
+```
+
+
+
+#### Nacos配置中心配置文件组成和使用
+
+##### Data ID
+
+在 `bootstrap.properties` 中配置 Nacos server 的地址和应用名
+
+```
+spring.cloud.nacos.config.server-addr=127.0.0.1:8848
+
+spring.application.name=example
+```
+
+说明：之所以需要配置 `spring.application.name` ，是因为它是构成 Nacos 配置管理 `dataId`字段的一部分。
+
+在 Nacos Spring Cloud 中，`dataId` 的完整格式如下：
+
+```plain
+${prefix}-${spring.profiles.active}.${file-extension}
+```
+
+- `prefix` 默认为 `spring.application.name` 的值，也可以通过配置项 `spring.cloud.nacos.config.prefix`来配置。
+- `spring.profiles.active` 即为当前环境对应的 profile，详情可以参考 [Spring Boot文档](https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-profiles.html#boot-features-profiles)。 **注意：当 `spring.profiles.active` 为空时，对应的连接符 `-` 也将不存在，dataId 的拼接格式变成 `${prefix}.${file-extension}`**
+- `file-exetension` 为配置内容的数据格式，可以通过配置项 `spring.cloud.nacos.config.file-extension` 来配置。目前只支持 `properties` 和 `yaml` 类型。
+
+
+
+例如配置文件为
+
+bootstrap.yaml
+
+```yaml
+spring:
+  application:
+    name: nacos-config-client
+  cloud:
+  	nacos:
+      config:
+        server-addr: localhost:8848 #Nacos作为配置中心地址
+        file-extension: yaml #指定yml格式配置
+```
+
+application.yaml
+
+```yaml
+spring:
+  profiles:
+    active: test 
+```
+
+那么按照上面Data ID的命名规则，我们在配置中心需要将对应的配置文件命名为 `nacos-config-client-test.yaml`。
+
+当配置文件在配置中心发布后，可以通过http://localhost:3377/config/info来获取配置文件中的内容
+
+
+
+#### 配置文件架构
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/SpringCloud/Nacos%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E6%9E%B6%E6%9E%84.jpeg" align="left" alt="Nacos配置架构图">
+
+通过bootstrap.yaml去更换对应的namespace、group
+
+```yaml
+spring:
+  application:
+    name: nacos-config-client
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 #Nacos服务注册中心地址
+      config:
+        server-addr: localhost:8848 #Nacos作为配置中心地址
+        file-extension: yaml #指定yml格式配置
+        group: TEST_GROUP
+        namespace: public
+```
+
+
+
+## 七、Sentinel
+
+### 7.1 Sentinel流程控制规则
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/SpringCloud/Sentinel%E6%B5%81%E6%8E%A7%E8%A7%84%E5%88%99%E9%9D%A2%E6%9D%BF.png" align="left" alt="Sentinel流程控制规则面板" height=500>
+
+Sentinel提供的流程控制规则中有如下选项
+
++ 资源名：唯一名称，默认为请求路径
++ 针对来源：Sentinel可以针对调用者来进行限流，默认为default（不区分来源），也可以填具体的微服务名称
++ 阈值类型和单机阈值
+  + QPS（每秒钟请求数量），单机阈值会在调用该资源名到达单机阈值（一定的QPS）的时候，会进行限流
+  + 线程数：当调用该资源名线程数量到达单机阈值的时候，会进行限流
++ 流控模式
+  + 直连：当资源名的访问到达限流条件（单机阈值）的时候，直接禁止访问
+  + 关联：当资源名的访问到达限流条件（单机阈值）的时候，直接禁止访问他自己以及和他处在相同Controller类下的资源
+  + 链路：只限制指定资源名的访问阈值，如果达到单机阈值，则进行限流
++ 流程效果
+  + 快速失效：直接显示失败，抛出异常
+  + Warm UP：设置默认冷启动阈值coldFactor为3，表示请求QPS从（threshold/3）开始启动，经过预热时长后才到达设定的QPS阈值。例如设置阈值为10，预热时长为5，那么一开始以10/3=3个QPS为阈值，然后在5秒内不断增大阈值，5秒后才将QPS的阈值变为10。
+  + 排队等待：以均匀的速度处理请求，阈值类型必须设置为QPS，否则无效，并且需要设置超时时间，超出这个时间，任务会被丢弃
+
+
+
+### 7.2 Sentinel降级规则
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/SpringCloud/Sentinel%E9%99%8D%E7%BA%A7%E8%A7%84%E5%88%99%E9%9D%A2%E6%9D%BF.png" align="left" alt="Sentinel降级规则">
+
+
+
+Sentinel提供的降级规则中有如下选项
+
++ 资源名：唯一名称，默认为请求路径
++ 降级策略
+  + RT（平均响应时间，秒级）：如果一秒内某个请求超过了平均响应时间**并且**时间窗口时间内通过的请求数量大于等于5，会触发降级，RT最大4900
+  + 异常比例（秒级）：QPS大于等于五**并且**每秒内异常比例超过了阈值，会触发降级，时间窗口结束，关闭降级
+  + 异常数（分钟级）：每分钟内异常数超过了阈值，会触发降级，时间窗口结束后，关闭降级。如果时间窗口小于60秒，那么结束熔断状态后仍然可能再进入熔断状态
