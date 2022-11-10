@@ -474,3 +474,144 @@ public class Demo06Servlet extends HttpServlet {
 
 Demo07Servlet代码同上不变，控制台信息和上面也相同。
 
+
+
+## 六、Servlet作用域
+
+### 6.1 Context/Application Scope - javax.servlet.ServletContext
+
+Context/Application scope begins when a webapp is started and ends when it is shutdown or reloaded. Parameters/attributes within the application scope will be available to all requests and sessions. The Context/Application object is available in a JSP page as an implicit object called **application**.
+   In a servlet, you can the object by calling **getServletContext()**. or by explicitly calling **getServletConfig().getServletContext()**.
+    
+
+
+
+演示代码
+
+Demo05Servlet.java
+
+```java
+@WebServlet("/demo05")
+public class Demo05Servlet extends HttpServlet {
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        ServletContext application = req.getServletContext();
+        application.setAttribute("username", "Ecifics");
+        resp.sendRedirect("demo06");
+    }
+}
+```
+
+Demo06Servlet.java
+
+```java
+@WebServlet("/demo06")
+public class Demo06Servlet extends HttpServlet {
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        ServletContext application = req.getServletContext();
+        System.out.println(application.getAttribute("username"));
+    }
+}
+```
+
+控制台打印信息
+
+```
+Ecifics
+```
+
+
+
+> 只要Tomcat没有关闭，那么无论用什么客户端（Chrome、Edge和Firefox等），访问本地8080端口下的/demo05都会打印出Ecifics
+
+### 6.2 Request Scope - javax.servlet.http.HttpServletRequest
+
+   Request scope begins when an HTTP request is received by a servlet and end when the servlet has delivered the HTTP response. With respect to the servlet life cycle, the request scope begins on entry to a servlet’s service() method and ends on the exit from that method. Request object is available in a JSP page as an implicit object called **request**.
+   A request object attribute can be set in a servlet and passed to a JSP within the same request.
+
+
+
+示例代码
+
+Demo01Servlet.java
+
+```java
+@WebServlet("/demo01")
+public class Demo01Servlet extends HttpServlet {
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        req.setAttribute("username", "Ecifics");
+        resp.sendRedirect("demo02");
+    }
+}
+```
+
+Demo02Servlet.java
+
+```java
+@WebServlet("/demo02")
+public class Demo02Servlet extends HttpServlet {
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        System.out.println(req.getAttribute("username"));
+    }
+}
+```
+
+控制台打印信息
+
+```
+null
+```
+
+> request的作用域只在同一个请求内有效
+
+### 6.3 Session Scope -javax.servlet.http.HttpSession
+
+   A session scope starts when a client (e.g. browser window) establishes connection with a webapp and continues till the point where the client, again read browser window, closes. Hence, session scope may span across multiple requests from the same client. In a servlet, you can get Session object by calling **request.getSession()** and in a JSP **session**.
+
+
+
+实例代码
+
+Demo03Servlet.java
+
+```java
+@WebServlet("/demo03")
+public class Demo03Servlet extends HttpServlet {
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        HttpSession session = req.getSession();
+        session.setAttribute("username", "Ecifics");
+        resp.sendRedirect("demo04");
+    }
+}
+```
+
+Demo04Servlet.java
+
+```java
+@WebServlet("/demo04")
+public class Demo04Servlet extends HttpServlet {
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        HttpSession session = req.getSession();
+        System.out.println(session.getAttribute("username"));
+    }
+}
+```
+
+控制台打印信息
+
+```
+Ecifics
+```
+
+> Session的作用域只在同一个Session内有效
