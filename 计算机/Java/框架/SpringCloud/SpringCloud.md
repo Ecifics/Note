@@ -1737,3 +1737,437 @@ Sentinel提供的降级规则中有如下选项
   + RT（平均响应时间，秒级）：如果一秒内某个请求超过了平均响应时间**并且**时间窗口时间内通过的请求数量大于等于5，会触发降级，RT最大4900
   + 异常比例（秒级）：QPS大于等于五**并且**每秒内异常比例超过了阈值，会触发降级，时间窗口结束，关闭降级
   + 异常数（分钟级）：每分钟内异常数超过了阈值，会触发降级，时间窗口结束后，关闭降级。如果时间窗口小于60秒，那么结束熔断状态后仍然可能再进入熔断状态
+
+
+
+
+
+### 7.3 Sentinel热点参数规则
+
+顾名思义，热点参数对于一些特定的参数进行限流处理，需要用上@SentinelResource注解，通过value属性指定热点参数限流资源名和blockHandler属性指定限流时处理方法。
+
+实例代码如下，这里用dealHotKey方法来处理限流
+
+```java
+@RestController
+public class FlowLimitController {
+    
+    @GetMapping("/testHotKey")
+    @SentinelResource(value = "testHotKey", blockHandler = "dealHotKey")
+    public String testHotKey(@RequestParam(value = "p1", required = false) String p1,
+                             @RequestParam(value = "p2", required = false) String p2) {
+        return "-----testHotKey";
+    }
+
+    public String dealHotKey(String p1, String p2, BlockException exception) {
+        return "------dealHostKey";
+    }
+}
+```
+
+> 处理限流时的方法不能是private
+
+
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/SpringCloud/Sentinel%E7%83%AD%E7%82%B9%E8%A7%84%E5%88%99%E9%9D%A2%E6%9D%BF.png" align="left" alt="Sentinel热点规则面板">
+
+在Sentinel面板中，有下面这些选项：
+
++ 资源名：唯一名称，默认为请求路径
++ 参数索引：用@SentinelResource修饰的方法，也就是进行热点key限流的方法的参数索引（第一个参数索引为0）
++ 单机阈值：表示在时间窗口内最多请求多少次
++ 参数例外项：用于为一些参数特殊值进行限流，例如平台对普通用户的阈值为5，vip的阈值为200，那么可以根据用户ID类型和数值来判断是否是vip用户，从而进行特殊化限流
+
+<img src="https://notetuchuang-1305953527.cos.ap-chengdu.myqcloud.com/images/SpringCloud/%E7%83%AD%E7%82%B9%E8%A7%84%E5%88%99%E5%8F%82%E6%95%B0%E4%BE%8B%E5%A4%96%E9%A1%B9.png" align="left" alt="热点规则参数例外项示例">
+
+上图配置表示对于FlowLimitController中的testHotKey方法的第一个参数p1进行了特殊化处理，如果p1的值为5的话，那么阈值设置为200
+
+
+
+### 7. 4 @SentinelResource限流使用
+
+#### 按资源名限流
+
+按照资源名限流，我们在Sentinel面板中填写资源名的时候填写@SentinelResource中value属性的值
+
+创建RateLimitController.java
+
+```java
+@RestController
+public class RateLimitController {
+
+    @GetMapping("/byResource")
+    @SentinelResource(value = "byResource", blockHandler = "handleException")
+    public CommonResult byResource() {
+        return new CommonResult(200, "按资源名限流成功", new Payment(2020L, "serial001"));
+    }
+
+    public CommonResult handleException(BlockException exception) {
+        return new CommonResult(444, exception.getClass().getCanonicalName() + " 服务不可用");
+    }
+}
+```
+
+此时方法byResource方法上面@SentinelResource注解的value值为byResource，故在Sentinel面板中资源名填写byResource，blockHandler属性填写处理限流的方法，如果没有指定，那么使用Sentinel自带的处理方法
+
+
+
+#### 按照URL进行限流
+
+同上面的代码，按照资源名限流，我们在Sentinel面板中填写资源名的时候填写@GetMapping中的URL，例如上述例子中@GetMapping中填写的是/byResource，那么在Sentinel面板中资源名填写/byResource
+
+
+
+#### 处理方法和业务逻辑的解耦
+
+将处理限流的方法放入单独的一个类中，处理方法必须是static方法
+
+CustomerBlockHandler.java
+
+```java
+public class CustomerBlockHandler {
+
+    public static CommonResult handlerException(BlockException exception) {
+        return new CommonResult(200, "客户自定义异常");
+    }
+}
+```
+
+
+
+@SentinelResource注解来指定相应类中处理限流的方法，blockHandlerClass指定处理限流的方法所在的类，blockHandler用于指定限流方法名
+
+```java
+@RestController
+public class RateLimitController {
+
+    @GetMapping("/rateLimit/customerBlockHandler")
+    @SentinelResource(value = "customerBlockHandler",
+            blockHandlerClass = CustomerBlockHandler.class,
+            blockHandler = "handlerException")
+    public CommonResult customerBlockHandler() {
+
+        return new CommonResult(200, "按客户自定义限流成功", new Payment(2020L, "serial003"));
+    }
+}
+```
+
+
+
+### 7.5 项目示例
+
+#### 服务提供者-支付服务
+
+项目创建cloudalibaba-provider-payment9003和cloudalibaba-provider-payment9004，创建方式相同，故只展示cloudalibaba-provider-payment9003的创建
+
+
+
+依赖
+
+```xml
+<dependencies>
+    <!-- SpringCloud ailibaba nacos-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+    <!-- SpringCloud ailibaba sentinel-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+    </dependency>
+    <!-- 引用自己定义的api通用包，可以使用Payment支付Entity -->
+    <dependency>
+        <groupId>com.ecifics.springcloud</groupId>
+        <artifactId>cloud-api-commons</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!--监控-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!--热部署-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+配置文件
+
+```yaml
+server:
+  port: 9003
+
+spring:
+  application:
+    name: nacos-payment-provider
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  #nacos
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+
+
+主启动类
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+public class PaymentMain9003 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain9003.class, args);
+    }
+}
+```
+
+
+
+Controller.java
+
+```java
+@RestController
+public class PaymentController {
+
+    @Value("${server.port}")
+    private String serverPort;
+
+    private static Map<Long, Payment> map = new HashMap<>();
+
+    static {
+        map.put(1L,new Payment(1L,"1111"));
+        map.put(2L,new Payment(2L,"2222"));
+        map.put(3L,new Payment(3L,"3333"));
+    }
+
+    @GetMapping(value = "/payment/{id}")
+    public CommonResult<Payment> payment(@PathVariable("id") Long id) {
+        Payment payment = map.get(id);
+        return new CommonResult<>(200,"from mysql,serverPort: " + serverPort,payment);
+    }
+}
+```
+
+
+
+#### 服务消费者-订单服务
+
+依赖
+
+```java
+<dependencies>
+    <!-- SpringCloud ailibaba nacos-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+    <!-- SpringCloud ailibaba sentinel-->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+    </dependency>
+    <!-- 引用自己定义的api通用包，可以使用Payment支付Entity -->
+    <dependency>
+        <groupId>com.angenin.springcloud</groupId>
+        <artifactId>cloud-api-commons</artifactId>
+        <version>${project.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <!--监控-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!--热部署-->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-devtools</artifactId>
+        <scope>runtime</scope>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <optional>true</optional>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+```
+
+
+
+配置文件
+
+```java
+server:
+  port: 84
+
+spring:
+  application:
+    name: nacos-order-consumer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848  #nacos
+    sentinel:
+      transport:
+        dashboard: localhost:8080    #sentinel
+        port: 8719
+
+#消费者将去访问的微服务名称
+server-url:
+  nacos-user-service: http://nacos-payment-provider
+
+#激活Sentinel对Feign的支持
+feign:
+  sentinel:
+    enabled: true
+```
+
+
+
+主启动类
+
+```java
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+public class OrderMain84 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(OrderMain84.class, args);
+    }
+}
+```
+
+
+
+配置RestTemplate
+
+```java
+@Configuration
+public class ApplicationContextConfig {
+
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+
+
+Controller
+
+```java
+@RestController
+public class CircleBreakerController {
+
+    public static  final  String SERVICE_URL = "http://nacos-payment-provider";
+
+    @Resource
+    private RestTemplate restTemplate;
+
+    @RequestMapping("/consumer/fallback/{id}")
+    @SentinelResource(value = "fallback")   //没有配置
+    public CommonResult<Payment> fallback(@PathVariable Long id) {
+        CommonResult<Payment> result = restTemplate.getForObject(
+                SERVICE_URL + "/payment/" + id, CommonResult.class,id);
+
+        if (id == 4) {
+            throw new IllegalArgumentException("IllegalArgument,非法参数异常...");
+        }
+
+        if (result.getData() == null) {
+            throw new NullPointerException("NullPointerException,该ID没有对应记录，空指针异常");
+        }
+
+        return  result;
+    }
+}
+```
+
+
+
+#### 熔断处理-fallback
+
+上述代码中，Order服务中如果输入的id为4，会出现SpringBoot默认的Error Page，对用户来说并不友好，于是，我们需要处理这个情况，在@SentinelResource注解上加上fallback属性指定处理熔断的方法名
+
+```java
+@RestController
+public class CircleBreakerController {
+    
+    .....
+    
+    @RequestMapping("/consumer/fallback/{id}")
+    @SentinelResource(value = "fallback", fallback = "handlerFallback")   //没有配置
+    public CommonResult<Payment> fallback(@PathVariable Long id) {
+        CommonResult<Payment> result = restTemplate.getForObject(
+                SERVICE_URL + "/payment/" + id, CommonResult.class,id);
+
+        if (id == 4) {
+            throw new IllegalArgumentException("IllegalArgument,非法参数异常...");
+        }
+
+        if (result.getData() == null) {
+            throw new NullPointerException("NullPointerException,该ID没有对应记录，空指针异常");
+        }
+
+        return  result;
+    }
+
+    public CommonResult handlerFallback(@PathVariable Long id,Throwable e) {
+        Payment payment = new Payment(id,"null");
+        return new CommonResult(444,"异常handlerFallback，exception内容： " + e.getMessage(), payment);
+    }
+}
+```
+
+> @SentinelResource中blockHandler需要在Sentinel面板处进行阈值配置（例如在特定时间窗口内出现多少次异常会触发），而fallback可以直接用于处理异常相关问题
+
+
+
