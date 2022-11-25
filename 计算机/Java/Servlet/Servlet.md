@@ -615,3 +615,215 @@ Ecifics
 ```
 
 > Session的作用域只在同一个Session内有效
+
+
+
+## 七、其他API
+
+### 7.1 ServletConfig
+
+#### 概述
+
+```java
+public interface ServletConfig
+```
+
+A servlet configuration object used by a servlet container to pass information to a servlet during initialization.
+
+Servlet是在第一次访问的时候创建，同时也会创建一个ServletConfig并作为返回值返回给Servlet对象作为其成员变量。
+
+```java
+public abstract class GenericServlet implements Servlet, ServletConfig, Serializable {
+    
+    ....
+
+    public void init(ServletConfig config) throws ServletException {
+        this.config = config;
+        this.init();
+    }
+
+    public void init() throws ServletException {
+    }
+
+    ....
+}
+```
+
+
+
+#### 相关方法
+
+| Modifier and Type     | Method and Description                                       |
+| :-------------------- | :----------------------------------------------------------- |
+| `String`              | `getInitParameter(String name)`Gets the value of the initialization parameter with the given name. |
+| `Enumeration<String>` | `getInitParameterNames()`Returns the names of the servlet's initialization parameters as an `Enumeration` of `String` objects, or an empty `Enumeration` if the servlet has no initialization parameters. |
+| `ServletContext`      | `getServletContext()`Returns a reference to the [`ServletContext`](https://docs.oracle.com/javaee/7/api/javax/servlet/ServletContext.html) in which the caller is executing. |
+| `String`              | `getServletName()`Returns the name of this servlet instance. |
+
+
+
+在@WebServlet注解中，通过initParams可以设置一些属性值
+
+```java
+@WebServlet(urlPatterns = "/demo08", initParams = {
+        @WebInitParam(name = "name", value = "Ecifics"),
+        @WebInitParam(name = "age", value = "18")
+})
+public class Demo08Servlet extends HttpServlet {
+
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+        
+        // Returns the name of this servlet instance
+        String servletName = config.getServletName();
+        System.out.println("servlet name: " + servletName);
+
+        String name = config.getInitParameter("name");
+        String age = config.getInitParameter("age");
+        System.out.println("name: " + name + ", age: " + age);
+    }
+}
+```
+
+控制台输出
+```
+servlet name: com.ecifics.servlet.Demo08Servlet
+name: Ecifics, age: 18
+```
+
+> 当然也可以通过xml文件中\<servlet\>中的\<init-param\>来设置初始参数和它的值
+>
+> ```xml
+> <?xml version="1.0" encoding="UTF-8"?>
+> <web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+>          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+>          xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_4_0.xsd"
+>          version="4.0">
+>     
+>     <servlet>
+>         <servlet-name>Demo08Servlet</servlet-name>
+>         <servlet-class>com.ecifics.servlet.Demo08Servlet</servlet-class>
+>         <init-param>
+>             <param-name>name</param-name>
+>             <param-value>Ecifics</param-value>
+>         </init-param>
+>         <init-param>
+>             <param-name>age</param-name>
+>             <param-value>18</param-value>
+>         </init-param>
+>     </servlet>
+> 
+>     <servlet-mapping>
+>         <servlet-name>Demo08Servlet</servlet-name>
+>         <url-pattern>/demo08</url-pattern>
+>     </servlet-mapping>
+> </web-app>
+> ```
+
+
+
+
+
+### 7.2 ServletContext
+
+#### 概述
+
+Defines a set of methods that a servlet uses to communicate with its servlet container, for example, to get the MIME type of a file, dispatch requests, or write to a log file.
+
+There is one context per "web application" per Java Virtual Machine. (A "web application" is a collection of servlets and content installed under a specific subset of the server's URL namespace such as `/catalog` and possibly installed via a `.war` file.)
+
+The `ServletContext` object is contained within the [`ServletConfig`](https://docs.oracle.com/javaee/7/api/javax/servlet/ServletConfig.html) object, which the Web server provides the servlet when the servlet is initialized.
+
+
+
+一个Web 应用中的所有 Servlet 共享同一个 ServletContext 对象，不同 Servlet 之间可以通过 ServletContext 对象实现数据通讯
+
+
+
+#### 相关方法
+
+| Modifier and Type                           | Method and Description                                       |
+| :------------------------------------------ | :----------------------------------------------------------- |
+| `Object`                                    | `getAttribute(String name)`Returns the servlet container attribute with the given name, or `null` if there is no attribute by that name. |
+| `String`                                    | `getContextPath()`Returns the context path of the web application. |
+| `String`                                    | `getRealPath(String path)`Gets the *real* path corresponding to the given *virtual* path. |
+| `RequestDispatcher`                         | `getRequestDispatcher(String path)`Returns a [`RequestDispatcher`](https://docs.oracle.com/javaee/7/api/javax/servlet/RequestDispatcher.html) object that acts as a wrapper for the resource located at the given path. |
+| `void`                                      | `removeAttribute(String name)`Removes the attribute with the given name from this ServletContext. |
+| `void`                                      | `setAttribute(String name, Object object)`Binds an object to a given attribute name in this ServletContext. |
+| `String` | `getInitParameter(String name)`Returns a `String` containing the value of the named context-wide initialization parameter, or `null` if the parameter does not exist. |
+| `boolean` | `setInitParameter(String name, String value)`Sets the context initialization parameter with the given name and value on this ServletContext. |
+
+
+
+#### 示例程序
+
+```java
+@WebServlet("/demo09")
+public class Demo09Servlet extends HttpServlet {
+
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+
+        ServletContext servletContext = config.getServletContext();
+        // Returns a String containing the value of the named context-wide initialization parameter, or null if the parameter does not exist
+        String contextParm = servletContext.getInitParameter("contextParam");
+        System.out.println("context param: " + contextParm);
+
+        // Returns the context path of the web application
+        String contextPath = servletContext.getContextPath();
+        System.out.println("context path: " + contextPath);
+
+        //Gets the real/absolute path corresponding to the given virtual path
+        String realPath = servletContext.getRealPath(contextPath);
+        System.out.println("real path: " + realPath);
+    }
+}
+```
+
+控制台信息
+
+```
+context param: Ecifics's Context
+context path: /pro02
+real path: D:\Java\Project\JavaWeb-Recover\out\artifacts\pro02_javaweb_servlet_war_exploded\pro02
+```
+
+
+
+```java
+@WebServlet("/demo10")
+public class Demo10Servlet extends HttpServlet {
+
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+
+        ServletContext servletContext = config.getServletContext();
+        servletContext.setAttribute("contextAttribute", new Object());
+    }
+}
+```
+
+```java
+@WebServlet("/demo11")
+public class Demo11Servlet extends HttpServlet {
+
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+
+        ServletContext servletContext = config.getServletContext();
+        Object contextAttribute = servletContext.getAttribute("contextAttribute");
+        System.out.println("context attribute: " + contextAttribute);
+    }
+}
+```
+
+控制台打印信息
+
+```
+context attribute: java.lang.Object@eefd0aa
+```
+
