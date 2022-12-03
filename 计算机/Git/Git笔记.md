@@ -236,6 +236,12 @@ Date:   Sat Mar 15 10:31:28 2008 -0700
 
 By default, with no arguments, `git log` lists the commits made in that repository in reverse chronological order; that is, the most recent commits show up first. As you can see, this command lists each commit with its SHA-1 checksum, the author’s name and email, the date written, and the commit message.
 
+>`git log` doesn't show **all** the branches all the time.
+>
+> By default, `git log` will only show commit history below the branch you've checked out.
+>
+>To show commit history for the desired branch you have to explicitly specify it: `git log testing`. To show all of the branches, add `--all` to your `git log` command.
+
 
 
 #### Common options to `git log`
@@ -880,23 +886,78 @@ This creates a new pointer to the same commit you're currently on. **In this cas
 
 <img src="https://ecifics-note-pic.oss-cn-chengdu.aliyuncs.com/git/head-to-master.png" align="left" alt="HEAD pointing to a branch">
 
+You can easily see this by running a simple `git log` command that shows you where the branch pointers are pointing. This option is called `--decorate`.
 
+```bash
+$ git log --oneline --decorate
+f30ab (HEAD -> master, testing) Add feature #32 - ability to add new formats to the central interface
+34ac2 Fix bug #1328 - stack overflow under certain conditions
+98ca9 Initial commit
+```
 
+You can see the `master` and `testing` branches that are right there next to the `f30ab` commit.
 
+> Creating a new branch and switching to it at the same time
+>
+> It’s typical to create a new branch and want to switch to that new branch at the same time — this can be done in one operation with `git checkout -b <newbranchname>`.
 
+> From Git version 2.23 onwards you can use `git switch` instead of `git checkout` to:
+>
+> - Switch to an existing branch: `git switch testing-branch`.
+> - Create a new branch and switch to it: `git switch -c new-branch`. The `-c` flag stands for create, you can also use the full flag: `--create`.
+> - Return to your previously checked out branch: `git switch -`.
 
+### 3.3 Switching Branches
 
+ Let's switch to the new `testing` branch:
 
+```bash
+$ git checkout testing
+```
 
+This moves `HEAD` to point to the `testing` branch.
 
+<img src="https://ecifics-note-pic.oss-cn-chengdu.aliyuncs.com/git/head-to-testing.png" align="left" alt="HEAD points to the testing">
 
+Well, let’s do another commit:
 
+```bash
+$ vim test.rb
+$ git commit -a -m 'made a change'
+```
 
+<img src="https://ecifics-note-pic.oss-cn-chengdu.aliyuncs.com/git/advance-commit-in-testing.png" align="left" alt="advance commit in testing">
 
+This is interesting, because now your `testing` branch has moved forward, but your `master` branch still points to the commit you were on when you ran `git checkout` to switch branches. Let’s switch back to the `master` branch:
 
+```bash
+$ git checkout master
+```
 
+<img src="https://ecifics-note-pic.oss-cn-chengdu.aliyuncs.com/git/checkout-master.png" align="left" alt="checkout to master">
 
+That command did two things. It moved the HEAD pointer back to point to the `master` branch, and it reverted the files in your working directory back to the snapshot that `master` points to. This also means the changes you make from this point forward will diverge from an older version of the project. It essentially rewinds the work you’ve done in your `testing` branch so you can go in a different direction.
 
+Let’s make a few changes and commit again:
 
+```bash
+$ vim test.rb
+$ git commit -a -m 'made other changes'
+```
 
+Now your project history has diverged. You created and switched to a branch, did some work on it, and then switched back to your main branch and did other work. Both of those changes are isolated in separate branches: you can switch back and forth between the branches and merge them together when you’re ready.
+
+<img src="https://ecifics-note-pic.oss-cn-chengdu.aliyuncs.com/git/advance-commit-in-master.png" align="left" alt="advance commit in master">
+
+You can also see this easily with the `git log` command. If you run `git log --oneline --decorate --graph --all` it will print out the history of your commits, showing where your branch pointers are and how your history has diverged.
+
+```bash
+$ git log --oneline --decorate --graph --all
+* c2b9e (HEAD, master) Made other changes
+| * 87ab2 (testing) Made a change
+|/
+* f30ab Add feature #32 - ability to add new formats to the central interface
+* 34ac2 Fix bug #1328 - stack overflow under certain conditions
+* 98ca9 initial commit of my project
+```
 
