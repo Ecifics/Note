@@ -961,3 +961,227 @@ $ git log --oneline --decorate --graph --all
 * 98ca9 initial commit of my project
 ```
 
+
+
+### 3.5 Basic Branching and Merging
+
+[Basic Branching and Merging]([Git - Basic Branching and Merging (git-scm.com)](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging))
+
+
+
+### 3.6 Branch Management
+
+The `git branch` command does more than just create and delete branches. If you run it with no arguments, you get a simple listing of your current branches:
+
+```bash
+$ git branch
+  iss53
+* master
+  testing
+```
+
+> Notice the `*` character that prefixes the `master` branch: it indicates the branch that you currently have checked out (i.e., the branch that `HEAD` points to). This means that if you commit at this point, the `master` branch will be moved forward with your new work. 
+
+To see the last commit on each branch, you can run `git branch -v`:
+
+```bash
+$ git branch -v
+  iss53   93b412c Fix javascript issue
+* master  7a98805 Merge branch 'iss53'
+  testing 782fd34 Add scott to the author list in the readme
+```
+
+The useful `--merged` and `--no-merged` options can filter this list to branches that you have or have not yet merged into the branch you’re currently on. To see which branches are already merged into the branch you’re on, you can run `git branch --merged`:
+
+```bash
+$ git branch --merged
+  iss53
+* master
+```
+
+Because you already merged in `iss53` earlier, you see it in your list. Branches on this list without the `*` in front of them are generally fine to delete with `git branch -d`; you’ve already incorporated their work into another branch, so you’re not going to lose anything.
+
+To see all the branches that contain work you haven’t yet merged in, you can run `git branch --no-merged`:
+
+```bash
+$ git branch --no-merged
+  testing
+```
+
+This shows your other branch. Because it contains work **that isn't merged in yet**, trying to delete it with `git branch -d` will fail:
+
+```bash
+$ git branch -d testing
+error: The branch 'testing' is not fully merged.
+If you are sure you want to delete it, run 'git branch -D testing'.
+```
+
+> If you really do want to delete the branch and lose that work, you can force it with `-D`, as the helpful message points out.
+
+
+
+#### Changing a branch name
+
+
+Suppose you have a branch that is called `bad-branch-name` and you want to change it to `corrected-branch-name`, while keeping all history. You also want to change the branch name on the remote (GitHub, GitLab, other server). 
+
+Rename the branch locally with the `git branch --move` command:
+
+```bash
+$ git branch --move bad-branch-name corrected-branch-name
+```
+
+This replaces your `bad-branch-name` with `corrected-branch-name`, but this change is only local for now. To let others see the corrected branch on the remote, push it:
+
+```bash
+$ git push --set-upstream origin corrected-branch-name
+```
+
+Now we’ll take a brief look at where we are now:
+
+```console
+$ git branch --all
+* corrected-branch-name
+  main
+  remotes/origin/bad-branch-name
+  remotes/origin/corrected-branch-name
+  remotes/origin/main
+```
+
+Notice that you’re on the branch `corrected-branch-name` and it’s available on the remote. However, the branch with the bad name is also still present there but you can delete it by executing the following command:
+
+```bash
+$ git push origin --delete bad-branch-name
+```
+
+Now the bad branch name is fully replaced with the corrected branch name.
+
+> Do not rename branches that are still in use by other collaborators. 
+
+
+
+#### Changing the master branch name
+
+> **Warning: Changing the name of a branch like master/main/mainline/default will break the integrations, services, helper utilities and build/release scripts that your repository uses. Before you do this, make sure you consult with your collaborators. Also, make sure you do a thorough search through your repo and update any references to the old branch name in your code and scripts.**
+
+
+Rename your local `master` branch into `main` with the following command:
+
+```bash
+$ git branch --move master main
+```
+
+There's no local `master` branch anymore, because it's renamed to the `main` branch.
+
+To let others see the new `main` branch, you need to push it to the remote. This makes the renamed branch available on the remote.
+
+```bash
+$ git push --set-upstream origin main
+```
+
+Now we end up with the following state:
+
+```bash
+$ git branch --all
+* main
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/main
+  remotes/origin/master
+```
+
+Now you have a few more tasks in front of you to complete the transition:
+
+- Any projects that depend on this one will need to update their code and/or configuration.
+- Update any test-runner configuration files.
+- Adjust build and release scripts.
+- Redirect settings on your repo host for things like the repo’s default branch, merge rules, and other things that match branch names.
+- Update references to the old branch in documentation.
+- Close or merge any pull requests that target the old branch.
+
+After you've done all these tasks, and are certain the `main` branch performs just as the `master` branch, you can delete the `master` branch:
+
+```bash
+$ git push origin --delete master
+```
+
+
+
+### 3.7 Remote Branches
+
+[Remote Branches]([Git - Remote Branches (git-scm.com)](https://git-scm.com/book/en/v2/Git-Branching-Remote-Branches))
+
+
+
+#### Tracking Branches
+
+Checking out a local branch from a remote-tracking branch automatically creates what is called a "tracking branch" (and the branch it tracks is called an "upstream branch"). Tracking branches are local branches that have a direct relationship to a remote branch. If you're on a tracking branch and type `git pull`, Git automatically knows which server to fetch from and which branch to merge in.
+
+When you clone a repository, it generally automatically creates a `master` branch that tracks `origin/master`. However, you can set up other tracking branches if you wish — ones that track branches on other remotes, or don’t track the `master` branch. The simple case is the example you just saw, running `git checkout -b <branch> <remote>/<branch>`. This is a common enough operation that Git provides the `--track` shorthand:
+
+```bash
+$ git checkout --track origin/serverfix
+Branch serverfix set up to track remote branch serverfix from origin.
+Switched to a new branch 'serverfix'
+```
+
+In fact, this is so common that there's even a shortcut for that shortcut. If the branch name you're trying to checkout (a) doesn't exist and (b) exactly matches a name on only one remote, Git will create a tracking branch for you:
+
+```bash
+$ git checkout serverfix
+Branch serverfix set up to track remote branch serverfix from origin.
+Switched to a new branch 'serverfix'
+```
+
+If you already have a local branch and want to set it to a remote branch you just pulled down, or want to change the upstream branch you're tracking, you can use the `-u` or `--set-upstream-to` option to `git branch` to explicitly set it at any time.
+
+```bash
+$ git branch -u origin/serverfix
+Branch serverfix set up to track remote branch serverfix from origin.
+```
+
+If you want to see what tracking branches you have set up, you can use the `-vv` option to `git branch`. This will list out your local branches with more information including what each branch is tracking and if your local branch is ahead, behind or both.
+
+```bash
+$ git branch -vv
+  iss53     7e424c3 [origin/iss53: ahead 2] Add forgotten brackets
+  master    1ae2a45 [origin/master] Deploy index fix
+* serverfix f8674d9 [teamone/server-fix-good: ahead 3, behind 1] This should do it
+  testing   5ea463a Try something new
+```
+
+**branch is X commits behind** means that there are X new (unmerged) commits on the branch which is being tracked by your current branch.
+
+**branch is X commits ahead** analogously means that your branch has X new commits, which haven't been merged into the tracked branch yet.
+
+Once you've pulled (thereby merging the remote changes into your local ones) and pushed (thereby publishing your changes and the merge to the remote), your own branch and the remote branch will point to the same commit, so neither is ahead or behind.
+
+
+
+### 3.8 Rebasing
+
+[Git - Rebasing (git-scm.com)](https://git-scm.com/book/en/v2/Git-Branching-Rebasing)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
